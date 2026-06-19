@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { resolve } from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
+import { join, resolve } from 'node:path'
 import { startEngine, stopEngine, type EngineHandle } from './engine'
 
 let mainWindow: BrowserWindow | null = null
@@ -53,6 +53,102 @@ ipcMain.handle('fs:openFolder', async () => {
   return result.filePaths[0]
 })
 
+// Diálogo de abrir arquivo; retorna o caminho absoluto ou null.
+ipcMain.handle('fs:openFileDialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+    title: 'Abrir arquivo',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Python', extensions: ['py'] },
+      { name: 'Todos', extensions: ['*'] }
+    ]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
+
+// Diálogo "Salvar como"; retorna o caminho absoluto escolhido ou null.
+ipcMain.handle('fs:saveDialog', async (_e, defaultDir?: string, suggestedName?: string) => {
+  const result = await dialog.showSaveDialog(mainWindow ?? undefined!, {
+    title: 'Salvar como',
+    defaultPath: join(defaultDir ?? app.getPath('documents'), suggestedName ?? 'untitled.py'),
+    filters: [
+      { name: 'Python', extensions: ['py'] },
+      { name: 'Todos', extensions: ['*'] }
+    ]
+  })
+  return result.canceled ? null : (result.filePath ?? null)
+})
+
+/** Envia uma ação do menu nativo para o renderer. */
+function sendMenu(action: string, payload?: unknown): void {
+  mainWindow?.webContents.send('menu', { action, payload })
+}
+
+/** Monta o menu da aplicação (File com as ações do editor + roles padrão). */
+function buildMenu(): void {
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Arquivo',
+      submenu: [
+        { label: 'Novo arquivo', accelerator: 'CmdOrCtrl+N', click: () => sendMenu('newFile') },
+        {
+          label: 'Nova pasta',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: () => sendMenu('newFolder')
+        },
+        { type: 'separator' },
+        { label: 'Abrir pasta…', accelerator: 'CmdOrCtrl+K', click: () => sendMenu('openFolder') },
+        { label: 'Abrir arquivo…', accelerator: 'CmdOrCtrl+O', click: () => sendMenu('openFile') },
+        { type: 'separator' },
+        { label: 'Salvar', accelerator: 'CmdOrCtrl+S', click: () => sendMenu('save') },
+        {
+          label: 'Salvar como…',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => sendMenu('saveAs')
+        },
+        {
+          label: 'Auto save',
+          type: 'checkbox',
+          checked: false,
+          click: (item) => sendMenu('toggleAutoSave', item.checked)
+        },
+        { type: 'separator' },
+        { label: 'Fechar aba', accelerator: 'CmdOrCtrl+W', click: () => sendMenu('closeTab') },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Editar',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'Ver',
+      submenu: [
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    { role: 'windowMenu' }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 app.whenReady().then(async () => {
   try {
     engine = await startEngine(repoRoot())
@@ -63,6 +159,7 @@ app.whenReady().then(async () => {
   }
 
   createWindow()
+  buildMenu()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEngine } from './engine/useEngine'
 import { ConsoleView } from './components/ConsoleView'
-import { FileTree } from './components/FileTree'
+import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { CodeEditor } from './editor/Editor'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
 
@@ -19,7 +19,7 @@ const SCRATCH_ID = 'scratch'
 interface Tab {
   id: string
   title: string
-  path: string | null // null = buffer scratch (não salvável em arquivo)
+  path: string | null // null = buffer scratch (sem arquivo até "Salvar como")
   code: string
   saved: string
 }
@@ -33,6 +33,21 @@ const newScratch = (): Tab => ({
   saved: SAMPLE
 })
 
+// --- helpers de caminho (Windows usa '\', normalizamos para '/') ---
+const norm = (s: string): string => s.replace(/\\/g, '/').replace(/\/+$/, '')
+function toWorkspaceRelative(abs: string, root: string): string | null {
+  const a = norm(abs)
+  const r = norm(root)
+  if (a.toLowerCase() === r.toLowerCase()) return null
+  if (a.toLowerCase().startsWith(r.toLowerCase() + '/')) return a.slice(r.length + 1)
+  return null // fora do workspace
+}
+const parentDir = (abs: string): string => {
+  const a = norm(abs)
+  const i = a.lastIndexOf('/')
+  return i === -1 ? a : a.slice(0, i)
+}
+
 export function App(): JSX.Element {
   const { conn, kernel, executions, errorText, execute, interrupt, restart, clear } = useEngine()
 
@@ -40,6 +55,9 @@ export function App(): JSX.Element {
   const [activeId, setActiveId] = useState<string>(SCRATCH_ID)
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null)
   const [fsError, setFsError] = useState<string | null>(null)
+  const [autoSave, setAutoSave] = useState(false)
+
+  const fileTreeRef = useRef<FileTreeHandle>(null)
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
   const connected = conn === 'open'
@@ -54,9 +72,7 @@ export function App(): JSX.Element {
   )
 
   const updateActiveCode = useCallback(
-    (code: string) => {
-      setTabs((prev) => prev.map((t) => (t.id === activeId ? { ...t, code } : t)))
-    },
+    (code: string) => setTabs((prev) => prev.map((t) => (t.id === activeId ? { ...t, code } : t))),
     [activeId]
   )
 
@@ -71,24 +87,44 @@ export function App(): JSX.Element {
     }
   }, [])
 
-  const openFile = useCallback(async (rel: string) => {
+  const openFile = useCallback(
+    async (rel: string) => {
+      setFsError(null)
+      if (tabs.some((t) => t.id === rel)) {
+        setActiveId(rel)
+        return
+      }
+      try {
+        const content = await readFile(rel)
+        setTabs((prev) => [
+          ...prev,
+          { id: rel, title: basename(rel), path: rel, code: content, saved: content }
+        ])
+        setActiveId(rel)
+      } catch (e) {
+        setFsError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [tabs]
+  )
+
+  const openFileFromDialog = useCallback(async () => {
     setFsError(null)
-    if (tabs.some((t) => t.id === rel)) {
-      setActiveId(rel)
-      return
-    }
     try {
-      const content = await readFile(rel)
-      setTabs((prev) => [
-        ...prev,
-        { id: rel, title: basename(rel), path: rel, code: content, saved: content }
-      ])
-      setActiveId(rel)
+      const abs = await window.pykortex.openFileDialog()
+      if (!abs) return
+      let rel = workspaceRoot ? toWorkspaceRelative(abs, workspaceRoot) : null
+      if (!rel) {
+        // arquivo fora do workspace atual: adota a pasta dele como workspace
+        const root = await setWorkspace(parentDir(abs))
+        setWorkspaceRoot(root)
+        rel = basename(norm(abs))
+      }
+      await openFile(rel)
     } catch (e) {
       setFsError(e instanceof Error ? e.message : String(e))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs])
+  }, [workspaceRoot, openFile])
 
   const save = useCallback(
     async (src: string) => {
@@ -105,68 +141,113 @@ export function App(): JSX.Element {
     [tabs, activeId]
   )
 
+  const saveAs = useCallback(async () => {
+    const t = tabs.find((x) => x.id === activeId)
+    if (!t) return
+    setFsError(null)
+    try {
+      const suggested = t.title.endsWith('.py') ? t.title : `${t.title}.py`
+      const abs = await window.pykortex.saveDialog(workspaceRoot ?? undefined, suggested)
+      if (!abs) return
+
+      let root = workspaceRoot
+      let rel = root ? toWorkspaceRelative(abs, root) : null
+      if (!rel) {
+        // salvou fora do workspace: adota a pasta de destino como workspace
+        root = await setWorkspace(parentDir(abs))
+        setWorkspaceRoot(root)
+        rel = basename(norm(abs))
+      }
+      await writeFile(rel, t.code)
+      const relPath = rel
+      setTabs((prev) =>
+        prev.map((x) =>
+          x.id === t.id
+            ? { ...x, id: relPath, path: relPath, title: basename(relPath), saved: t.code }
+            : x
+        )
+      )
+      setActiveId(rel)
+      fileTreeRef.current?.refresh()
+    } catch (e) {
+      setFsError(e instanceof Error ? e.message : String(e))
+    }
+  }, [tabs, activeId, workspaceRoot])
+
   const closeTab = useCallback(
     (id: string) => {
-      setTabs((prev) => {
-        const t = prev.find((x) => x.id === id)
-        if (t && isDirty(t) && !window.confirm(`Descartar alterações não salvas em "${t.title}"?`)) {
-          return prev
-        }
-        const next = prev.filter((x) => x.id !== id)
-        const result = next.length > 0 ? next : [newScratch()]
-        if (activeId === id) setActiveId(result[result.length - 1].id)
-        return result
-      })
+      const t = tabs.find((x) => x.id === id)
+      if (t && isDirty(t) && !window.confirm(`Descartar alterações não salvas em "${t.title}"?`)) {
+        return
+      }
+      const next = tabs.filter((x) => x.id !== id)
+      const result = next.length > 0 ? next : [newScratch()]
+      setTabs(result)
+      if (activeId === id) setActiveId(result[result.length - 1].id)
     },
-    [activeId]
+    [tabs, activeId]
   )
 
-  // árvore renomeou/apagou: ajusta abas afetadas
+  // árvore renomeou/apagou: ajusta abas afetadas (puro, sem efeitos no updater)
   const onPathChanged = useCallback(
     (oldPath: string, newPath: string | null) => {
       const affected = (p: string | null): boolean =>
         p === oldPath || (p != null && p.startsWith(oldPath + '/'))
+      const remap = (p: string): string =>
+        p === oldPath ? newPath! : newPath! + p.slice(oldPath.length)
 
-      setTabs((prev) => {
-        let next: Tab[]
-        if (newPath === null) {
-          next = prev.filter((t) => !affected(t.path))
-          if (next.length === 0) next = [newScratch()]
-        } else {
-          next = prev.map((t) => {
-            if (!affected(t.path)) return t
-            const np = t.path === oldPath ? newPath : newPath + t.path!.slice(oldPath.length)
-            return { ...t, id: np, path: np, title: basename(np) }
-          })
-        }
-        setActiveId((cur) => {
-          if (next.some((t) => t.id === cur)) return cur
-          // a aba ativa sumiu/renomeou: escolhe equivalente ou a última
-          const t = prev.find((x) => x.id === cur)
-          if (t && newPath !== null && affected(t.path)) {
-            return t.path === oldPath ? newPath : newPath + t.path!.slice(oldPath.length)
-          }
-          return next[next.length - 1].id
+      let next: Tab[]
+      if (newPath === null) {
+        next = tabs.filter((t) => !affected(t.path))
+        if (next.length === 0) next = [newScratch()]
+      } else {
+        next = tabs.map((t) => {
+          if (!affected(t.path)) return t
+          const np = remap(t.path!)
+          return { ...t, id: np, path: np, title: basename(np) }
         })
-        return next
-      })
+      }
+
+      let nextActive = activeId
+      if (!next.some((t) => t.id === nextActive)) {
+        const at = tabs.find((t) => t.id === activeId)
+        nextActive =
+          at && newPath !== null && affected(at.path)
+            ? remap(at.path!)
+            : next[next.length - 1].id
+      }
+      setTabs(next)
+      setActiveId(nextActive)
     },
-    []
+    [tabs, activeId]
   )
 
-  // Ctrl/Cmd+S fora do foco do editor
-  const saveRef = useRef<() => void>(() => {})
-  saveRef.current = () => void save(active?.code ?? '')
+  // ações do menu nativo (via ref para evitar closures velhos sem re-assinar)
+  const actionsRef = useRef<Record<string, (payload?: unknown) => void>>({})
+  actionsRef.current = {
+    newFile: () =>
+      workspaceRoot
+        ? fileTreeRef.current?.newFile()
+        : setFsError('Abra uma pasta primeiro (Arquivo › Abrir pasta).'),
+    newFolder: () =>
+      workspaceRoot
+        ? fileTreeRef.current?.newFolder()
+        : setFsError('Abra uma pasta primeiro (Arquivo › Abrir pasta).'),
+    openFolder: () => void openFolder(),
+    openFile: () => void openFileFromDialog(),
+    save: () => void save(active?.code ?? ''),
+    saveAs: () => void saveAs(),
+    toggleAutoSave: (p) => setAutoSave(Boolean(p)),
+    closeTab: () => active && closeTab(active.id)
+  }
+  useEffect(() => window.pykortex.onMenu(({ action, payload }) => actionsRef.current[action]?.(payload)), [])
+
+  // auto save: salva a aba ativa (se for arquivo e estiver suja) após 800ms ocioso
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        saveRef.current()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+    if (!autoSave || !active || !active.path || active.code === active.saved) return
+    const timer = setTimeout(() => void save(active.code), 800)
+    return () => clearTimeout(timer)
+  }, [autoSave, active, save])
 
   return (
     <div className="app">
@@ -176,6 +257,7 @@ export function App(): JSX.Element {
         <span className={`dot dot--${conn}`} />
         <span className="status">
           conexão: {conn} · kernel: {kernel}
+          {autoSave && ' · auto save'}
         </span>
       </header>
 
@@ -193,6 +275,7 @@ export function App(): JSX.Element {
             </div>
           )}
           <FileTree
+            ref={fileTreeRef}
             root={workspaceRoot}
             activePath={active?.path ?? null}
             onOpen={openFile}
@@ -210,7 +293,13 @@ export function App(): JSX.Element {
                 title={t.path ?? t.title}
               >
                 <span className="tab__title">{t.title}</span>
-                <span className="tab__close" onClick={(e) => (e.stopPropagation(), closeTab(t.id))}>
+                <span
+                  className="tab__close"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeTab(t.id)
+                  }}
+                >
                   {isDirty(t) ? '●' : '×'}
                 </span>
               </div>

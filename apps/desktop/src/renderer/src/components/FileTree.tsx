@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState
+} from 'react'
+import { createPortal } from 'react-dom'
 import {
   createEntry,
   deleteEntry,
@@ -16,6 +24,12 @@ interface TreeProps {
   onPathChanged: (oldPath: string, newPath: string | null) => void
 }
 
+export interface FileTreeHandle {
+  newFile: () => void
+  newFolder: () => void
+  refresh: () => void
+}
+
 type CreateState = { parent: string; type: 'file' | 'dir' } | null
 type MenuState = { path: string; type: 'file' | 'dir'; x: number; y: number } | null
 
@@ -26,7 +40,10 @@ const dirname = (p: string): string => {
 const join = (parent: string, name: string): string => (parent ? `${parent}/${name}` : name)
 
 /** Árvore de arquivos com expansão lazy, refresh preservando expansão e CRUD. */
-export function FileTree({ root, activePath, onOpen, onPathChanged }: TreeProps): JSX.Element {
+export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
+  { root, activePath, onOpen, onPathChanged },
+  ref
+) {
   const [children, setChildren] = useState<Record<string, FsEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
@@ -62,16 +79,14 @@ export function FileTree({ root, activePath, onOpen, onPathChanged }: TreeProps)
     if (root) void load('')
   }, [root, load])
 
-  // fecha o menu de contexto ao clicar em qualquer lugar
+  // fecha o menu de contexto com Escape (cliques fora são tratados pelo backdrop)
   useEffect(() => {
     if (!menu) return
-    const close = (): void => setMenu(null)
-    window.addEventListener('click', close)
-    window.addEventListener('contextmenu', close)
-    return () => {
-      window.removeEventListener('click', close)
-      window.removeEventListener('contextmenu', close)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenu(null)
     }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [menu])
 
   const toggle = useCallback(
@@ -164,6 +179,16 @@ export function FileTree({ root, activePath, onOpen, onPathChanged }: TreeProps)
     [load, onPathChanged]
   )
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      newFile: () => startCreate('', 'file'),
+      newFolder: () => startCreate('', 'dir'),
+      refresh: () => void refresh()
+    }),
+    [startCreate, refresh]
+  )
+
   if (!root) {
     return <div className="tree tree--empty">Nenhuma pasta aberta.</div>
   }
@@ -217,18 +242,30 @@ export function FileTree({ root, activePath, onOpen, onPathChanged }: TreeProps)
         ))}
       </div>
 
-      {menu && (
-        <ContextMenu
-          menu={menu}
-          onNewFile={() => startCreate(menu.path, 'file')}
-          onNewFolder={() => startCreate(menu.path, 'dir')}
-          onRename={() => ctrl.startRename(menu.path)}
-          onDelete={() => void doDelete(menu.path)}
-        />
-      )}
+      {menu &&
+        createPortal(
+          <>
+            <div
+              className="ctx-backdrop"
+              onClick={() => setMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setMenu(null)
+              }}
+            />
+            <ContextMenu
+              menu={menu}
+              onNewFile={() => startCreate(menu.path, 'file')}
+              onNewFolder={() => startCreate(menu.path, 'dir')}
+              onRename={() => ctrl.startRename(menu.path)}
+              onDelete={() => void doDelete(menu.path)}
+            />
+          </>,
+          document.body
+        )}
     </div>
   )
-}
+})
 
 interface NodeCtrl {
   children: Record<string, FsEntry[]>
