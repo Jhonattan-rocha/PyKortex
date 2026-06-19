@@ -146,6 +146,18 @@ class KernelSession:
         if self._km is not None:
             await self._km.interrupt_kernel()
 
+    async def restart(self) -> None:
+        """Reinicia o kernel (zera o namespace e o contador de execução).
+
+        As channels do client persistem (mesma conexão), então só re-esperamos
+        o kernel ficar pronto.
+        """
+        if self._km is None:
+            await self.start()
+            return
+        await self._km.restart_kernel(now=True)
+        await self._client.wait_for_ready(timeout=60)
+
     async def shutdown(self) -> None:
         if self._client is not None:
             self._client.stop_channels()

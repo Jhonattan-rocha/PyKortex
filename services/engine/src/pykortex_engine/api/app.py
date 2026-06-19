@@ -65,6 +65,10 @@ async def execute_ws(websocket: WebSocket) -> None:
                     await websocket.send_json(out)
             elif msg_type == "interrupt":
                 await session.interrupt()
+            elif msg_type == "restart":
+                await session.restart()
+                await websocket.send_json({"type": "restarted"})
+                await websocket.send_json({"type": "status", "state": "idle"})
             else:
                 await websocket.send_json(
                     {"type": "kernel_error", "message": f"tipo desconhecido: {msg_type}"}

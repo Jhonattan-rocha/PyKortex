@@ -1,28 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { KernelState, ServerMessage } from './protocol'
+import type { KernelState, OutputMessage, ServerMessage } from './protocol'
 
 export type ConnState = 'connecting' | 'open' | 'closed' | 'error'
+
+export interface Execution {
+  /** id local incremental (ordem de envio) */
+  id: number
+  /** código submetido (célula ou arquivo) */
+  code: string
+  status: 'running' | 'ok' | 'error' | 'aborted'
+  /** contador do kernel (In [n]); null enquanto não chega o reply */
+  executionCount: number | null
+  /** saídas do bloco (stream/result/display/error) */
+  outputs: OutputMessage[]
+}
 
 export interface UseEngine {
   conn: ConnState
   kernel: KernelState
-  outputs: ServerMessage[]
+  executions: Execution[]
   errorText: string | null
   execute: (code: string) => void
   interrupt: () => void
+  restart: () => void
   clear: () => void
 }
 
+const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
+
 /**
- * Conecta ao WebSocket /ws/execute do engine e acumula as mensagens recebidas.
- * Descobre host/porta via a ponte do preload (window.pykortex).
+ * Conecta ao /ws/execute e organiza a saída em EXECUÇÕES (estilo REPL).
+ *
+ * Atribuição FIFO: o backend processa um execute_request por vez e em ordem,
+ * então mantemos uma fila de ids pendentes e roteamos toda saída para a cabeça
+ * da fila, avançando quando chega o execute_reply correspondente.
  */
 export function useEngine(): UseEngine {
   const wsRef = useRef<WebSocket | null>(null)
+  const idCounter = useRef(0)
+  const pending = useRef<number[]>([]) // fila FIFO de ids aguardando reply
+
   const [conn, setConn] = useState<ConnState>('connecting')
   const [kernel, setKernel] = useState<KernelState>('starting')
-  const [outputs, setOutputs] = useState<ServerMessage[]>([])
+  const [executions, setExecutions] = useState<Execution[]>([])
   const [errorText, setErrorText] = useState<string | null>(null)
+
+  const patch = (id: number, fn: (ex: Execution) => Execution): void =>
+    setExecutions((prev) => prev.map((ex) => (ex.id === id ? fn(ex) : ex)))
 
   useEffect(() => {
     let cancelled = false
@@ -46,16 +70,45 @@ export function useEngine(): UseEngine {
         setConn('error')
         setErrorText('falha na conexão WebSocket com o engine')
       }
-      ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data) as ServerMessage
-        if (msg.type === 'status') {
-          setKernel(msg.state)
-          return
-        }
-        if (msg.type === 'kernel_error') {
-          setErrorText(msg.message)
-        }
-        setOutputs((prev) => [...prev, msg])
+      ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data) as ServerMessage)
+    }
+
+    function handleMessage(msg: ServerMessage): void {
+      if (msg.type === 'status') {
+        setKernel(msg.state)
+        return
+      }
+      if (msg.type === 'restarted') {
+        pending.current = []
+        return
+      }
+      if (msg.type === 'kernel_error') {
+        setErrorText(msg.message)
+        return
+      }
+
+      const head = pending.current[0]
+      if (head === undefined) return // saída sem execução associada
+
+      if (msg.type === 'execute_reply') {
+        patch(head, (ex) => ({
+          ...ex,
+          status: msg.status === 'ok' ? 'ok' : msg.status === 'aborted' ? 'aborted' : 'error',
+          executionCount: msg.execution_count ?? ex.executionCount
+        }))
+        pending.current.shift()
+        return
+      }
+
+      if (OUTPUT_TYPES.has(msg.type)) {
+        const out = msg as OutputMessage
+        const count =
+          out.type === 'execute_result' ? out.execution_count : null
+        patch(head, (ex) => ({
+          ...ex,
+          outputs: [...ex.outputs, out],
+          executionCount: count ?? ex.executionCount
+        }))
       }
     }
 
@@ -69,16 +122,26 @@ export function useEngine(): UseEngine {
   const execute = useCallback((code: string) => {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const id = ++idCounter.current
+    setExecutions((prev) => [
+      ...prev,
+      { id, code, status: 'running', executionCount: null, outputs: [] }
+    ])
+    pending.current.push(id)
     ws.send(JSON.stringify({ type: 'execute_request', code }))
   }, [])
 
   const interrupt = useCallback(() => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) return
-    ws.send(JSON.stringify({ type: 'interrupt' }))
+    wsRef.current?.send(JSON.stringify({ type: 'interrupt' }))
   }, [])
 
-  const clear = useCallback(() => setOutputs([]), [])
+  const restart = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: 'restart' }))
+    pending.current = []
+    setExecutions([])
+  }, [])
 
-  return { conn, kernel, outputs, errorText, execute, interrupt, clear }
+  const clear = useCallback(() => setExecutions([]), [])
+
+  return { conn, kernel, executions, errorText, execute, interrupt, restart, clear }
 }

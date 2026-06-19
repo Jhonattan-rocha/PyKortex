@@ -143,14 +143,58 @@ button:disabled {
   border-radius: 3px;
 }
 
-.output {
+/* console / blocos de execução */
+.console {
   flex: 1;
   overflow: auto;
-  padding: 8px 12px;
+  padding: 8px 10px;
   font-family: var(--mono);
 }
-.output--empty {
+.console--empty {
   color: var(--fg-dim);
+}
+.exec {
+  margin-bottom: 10px;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.exec--running {
+  border-left-color: #d7ba7d;
+}
+.exec--ok {
+  border-left-color: var(--accent);
+}
+.exec--error {
+  border-left-color: var(--error);
+}
+.exec__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.exec__prompt {
+  color: #569cd6;
+}
+.exec__status--ok {
+  color: var(--accent);
+}
+.exec__status--error {
+  color: var(--error);
+}
+.exec__code {
+  margin: 2px 0 4px;
+  padding: 4px 8px;
+  background: var(--bg-2);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  opacity: 0.85;
+}
+.exec__out {
+  padding-left: 2px;
 }
 .out {
   margin: 0;
@@ -168,16 +212,6 @@ button:disabled {
   color: #9cdcfe;
 }
 .out--error {
-  color: var(--error);
-}
-.out--reply {
-  color: var(--fg-dim);
-  font-size: 11px;
-  padding: 3px 0 8px;
-  border-bottom: 1px dashed var(--border);
-  margin-bottom: 6px;
-}
-.out--reply-error {
   color: var(--error);
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEngine } from './engine/useEngine'
-import { OutputView } from './components/OutputView'
+import { ConsoleView } from './components/ConsoleView'
 import { FileTree } from './components/FileTree'
 import { CodeEditor } from './editor/Editor'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
@@ -19,7 +19,7 @@ for i in range(1, 6):
 `
 
 export function App(): JSX.Element {
-  const { conn, kernel, outputs, errorText, execute, interrupt, clear } = useEngine()
+  const { conn, kernel, executions, errorText, execute, interrupt, restart, clear } = useEngine()
 
   const [code, setCode] = useState(SAMPLE)
   const [savedCode, setSavedCode] = useState(SAMPLE)
@@ -127,8 +127,11 @@ export function App(): JSX.Element {
               <button onClick={interrupt} disabled={!connected || !busy}>
                 ■ Interromper
               </button>
-              <button onClick={clear} disabled={outputs.length === 0}>
-                Limpar saída
+              <button onClick={restart} disabled={!connected} title="Reiniciar kernel">
+                ⟳ Restart
+              </button>
+              <button onClick={clear} disabled={executions.length === 0}>
+                Limpar
               </button>
             </div>
           </div>
@@ -144,10 +147,10 @@ export function App(): JSX.Element {
 
         <section className="pane pane--output">
           <div className="pane__head">
-            <span>Saída</span>
+            <span>Console</span>
           </div>
           {errorText && <div className="banner banner--error">{errorText}</div>}
-          <OutputView outputs={outputs} />
+          <ConsoleView executions={executions} />
         </section>
       </main>
     </div>
