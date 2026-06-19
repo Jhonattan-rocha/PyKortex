@@ -1,0 +1,18 @@
+{
+  "name": "pykortex",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PyKortex - IDE de análise de dados com motor Python (Jupyter kernels)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @pykortex/desktop",
+    "build": "npm run build --workspace @pykortex/desktop",
+    "engine:dev": "python -m uvicorn pykortex_engine.api.app:app --reload --port 8765 --app-dir services/engine/src"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

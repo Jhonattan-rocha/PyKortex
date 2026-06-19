@@ -1,0 +1,166 @@
+"""Gerência do ciclo de vida e execução de kernels Jupyter.
+
+Para a Fase 0 mantemos uma única sessão de kernel por processo do engine.
+Fases seguintes vão generalizar para múltiplos kernels (um por documento/projeto).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+from queue import Empty
+from typing import Any, AsyncIterator
+
+from jupyter_client.manager import AsyncKernelManager
+
+# Tempo máximo de espera por uma mensagem do kernel (segundos). Execuções longas
+# emitem mensagens de status periodicamente, então este timeout vale por-mensagem,
+# não pela execução inteira.
+KERNEL_MSG_TIMEOUT = float(os.environ.get("PYKORTEX_KERNEL_MSG_TIMEOUT", "1.0"))
+KERNEL_NAME = os.environ.get("PYKORTEX_KERNEL_NAME", "pykortex")
+
+
+def _ensure_kernelspec() -> str:
+    """Garante um kernelspec instalado dentro da venv atual e retorna seu nome.
+
+    Evita depender de `jupyter kernelspec install` manual. Se o ipykernel não
+    estiver disponível por algum motivo, cai para o spec padrão 'python3'.
+    """
+    try:
+        from ipykernel.kernelspec import install as install_kernel_spec
+
+        install_kernel_spec(
+            user=False,
+            prefix=sys.prefix,
+            kernel_name=KERNEL_NAME,
+            display_name="PyKortex (Python 3)",
+        )
+        return KERNEL_NAME
+    except Exception:  # noqa: BLE001 - fallback resiliente para o spike
+        return "python3"
+
+
+def _translate_iopub(msg: dict[str, Any]) -> dict[str, Any] | None:
+    """Traduz uma mensagem do canal iopub para o protocolo do PyKortex.
+
+    Retorna None para mensagens que não precisam chegar ao frontend.
+    """
+    msg_type = msg["header"]["msg_type"]
+    content = msg["content"]
+
+    if msg_type == "stream":
+        return {"type": "stream", "name": content["name"], "text": content["text"]}
+    if msg_type == "execute_result":
+        return {
+            "type": "execute_result",
+            "execution_count": content.get("execution_count"),
+            "data": content.get("data", {}),
+        }
+    if msg_type == "display_data":
+        return {"type": "display_data", "data": content.get("data", {})}
+    if msg_type == "error":
+        return {
+            "type": "error",
+            "ename": content.get("ename", ""),
+            "evalue": content.get("evalue", ""),
+            "traceback": content.get("traceback", []),
+        }
+    if msg_type == "status":
+        return {"type": "status", "state": content.get("execution_state", "idle")}
+    # execute_input e demais: ignorados na Fase 0
+    return None
+
+
+class KernelSession:
+    """Encapsula um AsyncKernelManager + client e expõe execução em streaming."""
+
+    def __init__(self) -> None:
+        self._km: AsyncKernelManager | None = None
+        self._client: Any = None
+        self._start_lock = asyncio.Lock()
+
+    @property
+    def is_alive(self) -> bool:
+        return self._km is not None
+
+    async def start(self) -> None:
+        async with self._start_lock:
+            if self._km is not None:
+                return
+            kernel_name = _ensure_kernelspec()
+            km = AsyncKernelManager(kernel_name=kernel_name)
+            await km.start_kernel()
+            client = km.client()
+            client.start_channels()
+            await client.wait_for_ready(timeout=60)
+            self._km = km
+            self._client = client
+
+    async def execute(self, code: str) -> AsyncIterator[dict[str, Any]]:
+        """Executa `code` e produz mensagens traduzidas conforme chegam.
+
+        Encerra quando o kernel volta ao estado 'idle' para esta requisição.
+        """
+        if self._km is None:
+            await self.start()
+        client = self._client
+
+        msg_id = client.execute(code)
+
+        # Stream das mensagens do canal iopub pertencentes a esta execução.
+        while True:
+            try:
+                msg = await client.get_iopub_msg(timeout=KERNEL_MSG_TIMEOUT)
+            except Empty:
+                continue
+            except asyncio.TimeoutError:
+                continue
+
+            if msg.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+
+            translated = _translate_iopub(msg)
+            if translated is not None:
+                yield translated
+
+            if (
+                msg["header"]["msg_type"] == "status"
+                and msg["content"].get("execution_state") == "idle"
+            ):
+                break
+
+        # Reply do canal shell: status final + execution_count.
+        try:
+            reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
+            content = reply["content"]
+            yield {
+                "type": "execute_reply",
+                "status": content.get("status", "ok"),
+                "execution_count": content.get("execution_count"),
+            }
+        except (Empty, asyncio.TimeoutError):
+            pass
+
+    async def interrupt(self) -> None:
+        if self._km is not None:
+            await self._km.interrupt_kernel()
+
+    async def shutdown(self) -> None:
+        if self._client is not None:
+            self._client.stop_channels()
+            self._client = None
+        if self._km is not None:
+            await self._km.shutdown_kernel(now=True)
+            self._km = None
+
+
+_session: KernelSession | None = None
+
+
+def get_session() -> KernelSession:
+    """Retorna a sessão de kernel singleton do processo."""
+    global _session
+    if _session is None:
+        _session = KernelSession()
+    return _session
