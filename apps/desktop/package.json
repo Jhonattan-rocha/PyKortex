@@ -9,6 +9,10 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "monaco-editor": "^0.50.0"
+  },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
