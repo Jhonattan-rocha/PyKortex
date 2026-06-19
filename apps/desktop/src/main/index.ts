@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import { startEngine, stopEngine, type EngineHandle } from './engine'
 
@@ -41,6 +41,16 @@ ipcMain.handle('engine:info', () => {
     return { ok: true, host: engine.host, port: engine.port }
   }
   return { ok: false, error: engineError ?? 'engine ainda não iniciado' }
+})
+
+// Abre o diálogo nativo de seleção de pasta; retorna o caminho ou null.
+ipcMain.handle('fs:openFolder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+    title: 'Abrir pasta como workspace',
+    properties: ['openDirectory']
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
 })
 
 app.whenReady().then(async () => {

@@ -3,6 +3,7 @@
 Expõe:
   GET  /health           -> readiness check (usado pelo Electron antes de abrir a UI)
   WS   /ws/execute       -> execução de código em streaming via kernel Jupyter
+  REST /fs/*             -> operações de filesystem confinadas ao workspace
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from pykortex_engine import __version__
+from pykortex_engine.api.files_router import router as files_router
 from pykortex_engine.kernels import get_session
 
 logger = logging.getLogger("pykortex.engine")
@@ -28,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(files_router)
 
 
 @app.get("/health")

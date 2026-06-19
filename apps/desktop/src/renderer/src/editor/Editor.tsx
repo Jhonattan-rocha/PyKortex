@@ -10,6 +10,8 @@ export interface EditorProps {
   onChange: (value: string) => void
   /** executa um trecho de código (célula ou arquivo inteiro) */
   onRun: (code: string) => void
+  /** salva o conteúdo atual (Ctrl/Cmd+S) */
+  onSave: (code: string) => void
 }
 
 /**
@@ -21,10 +23,12 @@ export interface EditorProps {
  * Os comandos leem o modelo e o callback via refs, então nunca capturam
  * estado/props velhos (o onMount roda só uma vez).
  */
-export function CodeEditor({ value, onChange, onRun }: EditorProps): JSX.Element {
+export function CodeEditor({ value, onChange, onRun, onSave }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
   const onRunRef = useRef(onRun)
   onRunRef.current = onRun
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
 
   const runCurrentCell = (advance: boolean): void => {
     const editor = editorRef.current
@@ -68,6 +72,10 @@ export function CodeEditor({ value, onChange, onRun }: EditorProps): JSX.Element
       monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
       () => runAll()
     )
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      const src = editorRef.current?.getModel()?.getValue() ?? ''
+      onSaveRef.current(src)
+    })
   }
 
   return (

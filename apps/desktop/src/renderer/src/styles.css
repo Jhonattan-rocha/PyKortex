@@ -83,6 +83,9 @@ body {
   min-height: 0;
   background: var(--border);
 }
+.main--3col {
+  grid-template-columns: 240px 1.4fr 1fr;
+}
 
 .pane {
   display: flex;
@@ -176,6 +179,80 @@ button:disabled {
 }
 .out--reply-error {
   color: var(--error);
+}
+
+/* sidebar / árvore */
+.pane--sidebar {
+  overflow: hidden;
+}
+.ws-root {
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border);
+  direction: rtl;
+  text-align: left;
+}
+.tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+  font-size: 12px;
+  user-select: none;
+}
+.tree--empty,
+.tree--error {
+  padding: 10px 12px;
+  color: var(--fg-dim);
+}
+.tree--error {
+  color: var(--error);
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tree-row:hover {
+  background: var(--bg-3);
+}
+.tree-row--active {
+  background: rgba(14, 159, 110, 0.18);
+}
+.tree-row--muted {
+  color: var(--fg-dim);
+  cursor: default;
+}
+.tree-icon {
+  width: 10px;
+  color: var(--fg-dim);
+  flex: none;
+}
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filetab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.dirty {
+  color: #d7ba7d;
+  font-size: 10px;
 }
 
 .banner {
