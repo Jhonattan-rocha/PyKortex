@@ -31,7 +31,13 @@ export interface FileTreeHandle {
 }
 
 type CreateState = { parent: string; type: 'file' | 'dir' } | null
-type MenuState = { path: string; type: 'file' | 'dir'; x: number; y: number } | null
+type MenuState = {
+  path: string
+  type: 'file' | 'dir'
+  x: number
+  y: number
+  root?: boolean // menu do espaço vazio (raiz do workspace)
+} | null
 
 const dirname = (p: string): string => {
   const i = p.lastIndexOf('/')
@@ -229,7 +235,13 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
 
       {error && <div className="tree--error">{error}</div>}
 
-      <div className="tree">
+      <div
+        className="tree"
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMenu({ path: '', type: 'dir', x: e.clientX, y: e.clientY, root: true })
+        }}
+      >
         {creating?.parent === '' && (
           <CreateInput
             depth={0}
@@ -260,6 +272,10 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
               onNewFolder={() => startCreate(menu.path, 'dir')}
               onRename={() => ctrl.startRename(menu.path)}
               onDelete={() => void doDelete(menu.path)}
+              onRefresh={() => {
+                setMenu(null)
+                void refresh()
+              }}
             />
           </>,
           document.body
@@ -320,6 +336,7 @@ function FileNode({
         onClick={() => (isDir ? ctrl.toggle(entry.path) : ctrl.onOpen(entry.path))}
         onContextMenu={(e) => {
           e.preventDefault()
+          e.stopPropagation() // não dispara o menu de raiz do container
           ctrl.openMenu(entry.path, entry.type, e.clientX, e.clientY)
         }}
         onKeyDown={(e) => {
@@ -416,14 +433,28 @@ function ContextMenu({
   onNewFile,
   onNewFolder,
   onRename,
-  onDelete
+  onDelete,
+  onRefresh
 }: {
   menu: NonNullable<MenuState>
   onNewFile: () => void
   onNewFolder: () => void
   onRename: () => void
   onDelete: () => void
+  onRefresh: () => void
 }): JSX.Element {
+  // Menu do espaço vazio (raiz do workspace): só criar + atualizar.
+  if (menu.root) {
+    return (
+      <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
+        <button onClick={onNewFile}>Novo arquivo</button>
+        <button onClick={onNewFolder}>Nova pasta</button>
+        <div className="ctx-sep" />
+        <button onClick={onRefresh}>Atualizar</button>
+      </div>
+    )
+  }
+
   return (
     <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
       {menu.type === 'dir' && (

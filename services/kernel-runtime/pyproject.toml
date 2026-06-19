@@ -1,0 +1,14 @@
+[project]
+name = "pykortex"
+version = "0.0.0"
+description = "PyKortex in-kernel runtime API: viewers, commands e display rico"
+requires-python = ">=3.11"
+# pandas é a primeira integração de dados; ipython vem junto com o ipykernel.
+dependencies = ["pandas>=2.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

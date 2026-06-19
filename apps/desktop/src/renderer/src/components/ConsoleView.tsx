@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Execution } from '../engine/useEngine'
-import type { OutputMessage } from '../engine/protocol'
+import { DATAFRAME_MIME, type DataFramePayload, type OutputMessage } from '../engine/protocol'
+import { DataFrameView } from './DataFrameView'
 
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
 export function ConsoleView({ executions }: { executions: Execution[] }): JSX.Element {
@@ -53,9 +54,14 @@ function OutputItem({ msg }: { msg: OutputMessage }): JSX.Element | null {
     case 'execute_result':
     case 'display_data': {
       const data = msg.data as Record<string, unknown>
+      // MIME rico do PyKortex tem prioridade sobre html/texto.
+      const df = data[DATAFRAME_MIME] as DataFramePayload | undefined
+      if (df && df.kind === 'dataframe') {
+        return <DataFrameView df={df} />
+      }
       const html = data['text/html']
       if (typeof html === 'string') {
-        // Fase 1: kernel local de confiança. Sanitização entra na Fase 2.
+        // kernel local de confiança nesta fase; sanitização entra depois
         return <div className="out out--html" dangerouslySetInnerHTML={{ __html: html }} />
       }
       return <pre className="out out--result">{String(data['text/plain'] ?? '')}</pre>

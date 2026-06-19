@@ -45,3 +45,16 @@ export type ServerMessage =
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg
+
+// --- MIMEs customizados do PyKortex (espelham pykortex/mime.py) ---
+export const DATAFRAME_MIME = 'application/vnd.pykortex.dataframe+json'
+
+export interface DataFramePayload {
+  kind: 'dataframe'
+  shape: [number, number] // [linhas, colunas]
+  columns: { name: string; dtype: string }[]
+  index_name: string | null
+  rows: { index: unknown; values: unknown[] }[]
+  truncated: boolean
+  shown: number
+}

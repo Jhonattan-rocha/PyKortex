@@ -20,6 +20,7 @@ Electron (main) ──spawn──► FastAPI (uvicorn)
 
 - `apps/desktop` — aplicação Electron (main / preload / renderer React).
 - `services/engine` — backend FastAPI + gerência de kernels Jupyter.
+- `services/kernel-runtime` — pacote `pykortex` (API in-kernel: viewers ricos, comandos).
 - `packages/protocol` — contratos de mensagem compartilhados (WS/REST).
 
 ## Pré-requisitos
@@ -33,11 +34,12 @@ Electron (main) ──spawn──► FastAPI (uvicorn)
 # 1. dependências do frontend (raiz do monorepo)
 npm install
 
-# 2. backend Python
+# 2. backend Python + runtime in-kernel
 cd services/engine
 python -m venv .venv
 .venv\Scripts\activate      # Windows
 pip install -e .
+pip install -e ../kernel-runtime   # pacote pykortex (viewers ricos no kernel)
 
 # 3. rodar tudo (na raiz) — Electron sobe o backend automaticamente
 npm run dev

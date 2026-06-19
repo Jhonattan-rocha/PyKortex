@@ -96,6 +96,34 @@ class KernelSession:
             await client.wait_for_ready(timeout=60)
             self._km = km
             self._client = client
+            await self._activate_runtime()
+
+    async def _activate_runtime(self) -> None:
+        """Ativa o runtime in-kernel (viewers ricos do PyKortex), best-effort."""
+        code = (
+            "try:\n"
+            "    import pykortex as __pk; __pk._activate()\n"
+            "except Exception:\n"
+            "    pass\n"
+        )
+        try:
+            await self._run_silent(code)
+        except Exception:  # noqa: BLE001 - ausência do runtime não é fatal
+            pass
+
+    async def _run_silent(self, code: str) -> None:
+        """Executa código sem histórico/saída e aguarda o reply do shell."""
+        client = self._client
+        msg_id = client.execute(
+            code, silent=True, store_history=False, allow_stdin=False
+        )
+        for _ in range(50):
+            try:
+                reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
+            except (Empty, asyncio.TimeoutError):
+                continue
+            if reply.get("parent_header", {}).get("msg_id") == msg_id:
+                return
 
     async def execute(self, code: str) -> AsyncIterator[dict[str, Any]]:
         """Executa `code` e produz mensagens traduzidas conforme chegam.
@@ -157,6 +185,7 @@ class KernelSession:
             return
         await self._km.restart_kernel(now=True)
         await self._client.wait_for_ready(timeout=60)
+        await self._activate_runtime()
 
     async def shutdown(self) -> None:
         if self._client is not None:
