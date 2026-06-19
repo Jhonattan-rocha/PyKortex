@@ -280,6 +280,81 @@ button:disabled {
 .pane--sidebar {
   overflow: hidden;
 }
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sidebar-section--files {
+  flex: 1 1 60%;
+}
+.sidebar-section--vars {
+  flex: 1 1 40%;
+  border-top: 1px solid var(--border);
+}
+
+/* variable explorer */
+.vars {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.vars__list {
+  flex: 1;
+  overflow: auto;
+  font-size: 12px;
+}
+.vars__empty {
+  padding: 10px 12px;
+  color: var(--fg-dim);
+}
+.var-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.var-row:hover {
+  background: var(--bg-3);
+}
+.var-kind {
+  flex: none;
+  width: 22px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 1px 0;
+  background: var(--bg-3);
+  color: var(--fg-dim);
+}
+.var-kind--DataFrame {
+  background: rgba(14, 159, 110, 0.25);
+  color: #4ade80;
+}
+.var-kind--Series {
+  background: rgba(86, 156, 214, 0.25);
+  color: #9cdcfe;
+}
+.var-kind--ndarray {
+  background: rgba(197, 134, 192, 0.25);
+  color: #c586c0;
+}
+.var-name {
+  font-family: var(--mono);
+  color: var(--fg);
+  flex: none;
+}
+.var-summary {
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+}
 .ws-root {
   padding: 4px 10px;
   font-size: 10px;

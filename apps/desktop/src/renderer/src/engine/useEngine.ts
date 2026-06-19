@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { KernelState, OutputMessage, ServerMessage } from './protocol'
+import type { KernelState, OutputMessage, ServerMessage, VariableInfo } from './protocol'
 
 export type ConnState = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -15,11 +15,13 @@ export interface UseEngine {
   conn: ConnState
   kernel: KernelState
   executions: Execution[]
+  variables: VariableInfo[]
   errorText: string | null
   execute: (code: string) => void
   interrupt: () => void
   restart: () => void
   clear: () => void
+  inspect: () => void
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
@@ -37,6 +39,7 @@ export function useEngine(): UseEngine {
   const [conn, setConn] = useState<ConnState>('connecting')
   const [kernel, setKernel] = useState<KernelState>('starting')
   const [executions, setExecutions] = useState<Execution[]>([])
+  const [variables, setVariables] = useState<VariableInfo[]>([])
   const [errorText, setErrorText] = useState<string | null>(null)
 
   const patch = (id: number, fn: (ex: Execution) => Execution): void =>
@@ -47,6 +50,12 @@ export function useEngine(): UseEngine {
     let ws: WebSocket | null = null
     let retry = 0
     let timer: ReturnType<typeof setTimeout> | undefined
+
+    function requestInspect(): void {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'inspect' }))
+      }
+    }
 
     function scheduleRetry(): void {
       if (cancelled) return
@@ -71,6 +80,12 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'restarted') {
         pending.current = []
+        setVariables([])
+        requestInspect()
+        return
+      }
+      if (msg.type === 'variables') {
+        setVariables(msg.variables)
         return
       }
       if (msg.type === 'kernel_error') {
@@ -87,6 +102,8 @@ export function useEngine(): UseEngine {
           executionCount: msg.execution_count ?? ex.executionCount
         }))
         pending.current.shift()
+        // quando todas as execuções pendentes terminam, atualiza as variáveis
+        if (pending.current.length === 0) requestInspect()
         return
       }
       if (OUTPUT_TYPES.has(msg.type)) {
@@ -119,6 +136,7 @@ export function useEngine(): UseEngine {
         retry = 0
         setConn('open')
         setErrorText(null)
+        requestInspect() // estado inicial das variáveis
       }
       ws.onclose = () => {
         if (cancelled) return
@@ -165,5 +183,20 @@ export function useEngine(): UseEngine {
 
   const clear = useCallback(() => setExecutions([]), [])
 
-  return { conn, kernel, executions, errorText, execute, interrupt, restart, clear }
+  const inspect = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: 'inspect' }))
+  }, [])
+
+  return {
+    conn,
+    kernel,
+    executions,
+    variables,
+    errorText,
+    execute,
+    interrupt,
+    restart,
+    clear,
+    inspect
+  }
 }

@@ -65,6 +65,9 @@ async def execute_ws(websocket: WebSocket) -> None:
                     await websocket.send_json(out)
             elif msg_type == "interrupt":
                 await session.interrupt()
+            elif msg_type == "inspect":
+                variables = await session.inspect()
+                await websocket.send_json({"type": "variables", "variables": variables})
             elif msg_type == "restart":
                 await session.restart()
                 await websocket.send_json({"type": "restarted"})

@@ -7,7 +7,8 @@
 export type ExecuteRequest = { type: 'execute_request'; code: string }
 export type InterruptRequest = { type: 'interrupt' }
 export type RestartRequest = { type: 'restart' }
-export type ClientMessage = ExecuteRequest | InterruptRequest | RestartRequest
+export type InspectRequest = { type: 'inspect' }
+export type ClientMessage = ExecuteRequest | InterruptRequest | RestartRequest | InspectRequest
 
 // Servidor -> Cliente
 export type KernelState = 'busy' | 'idle' | 'starting'
@@ -33,6 +34,14 @@ export type ExecuteReplyMsg = {
 export type KernelErrorMsg = { type: 'kernel_error'; message: string }
 export type RestartedMsg = { type: 'restarted' }
 
+export interface VariableInfo {
+  name: string
+  type: string
+  kind: 'DataFrame' | 'Series' | 'ndarray' | 'collection' | 'scalar' | 'str' | 'other'
+  summary: string
+}
+export type VariablesMsg = { type: 'variables'; variables: VariableInfo[] }
+
 export type ServerMessage =
   | StatusMsg
   | StreamMsg
@@ -42,6 +51,7 @@ export type ServerMessage =
   | ExecuteReplyMsg
   | KernelErrorMsg
   | RestartedMsg
+  | VariablesMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg

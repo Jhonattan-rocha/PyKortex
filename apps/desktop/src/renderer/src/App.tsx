@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEngine } from './engine/useEngine'
 import { ConsoleView } from './components/ConsoleView'
 import { FileTree, type FileTreeHandle } from './components/FileTree'
+import { VariableExplorer } from './components/VariableExplorer'
 import { CodeEditor } from './editor/Editor'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
 
@@ -49,7 +50,8 @@ const parentDir = (abs: string): string => {
 }
 
 export function App(): JSX.Element {
-  const { conn, kernel, executions, errorText, execute, interrupt, restart, clear } = useEngine()
+  const { conn, kernel, executions, variables, errorText, execute, interrupt, restart, clear, inspect } =
+    useEngine()
 
   const [tabs, setTabs] = useState<Tab[]>([newScratch()])
   const [activeId, setActiveId] = useState<string>(SCRATCH_ID)
@@ -263,24 +265,29 @@ export function App(): JSX.Element {
 
       <main className="main main--3col">
         <aside className="pane pane--sidebar">
-          <div className="pane__head">
-            <span>Explorer</span>
-            <div className="actions">
-              <button onClick={openFolder}>Abrir pasta…</button>
+          <div className="sidebar-section sidebar-section--files">
+            <div className="pane__head">
+              <span>Explorer</span>
+              <div className="actions">
+                <button onClick={openFolder}>Abrir pasta…</button>
+              </div>
             </div>
+            {workspaceRoot && (
+              <div className="ws-root" title={workspaceRoot}>
+                {workspaceRoot}
+              </div>
+            )}
+            <FileTree
+              ref={fileTreeRef}
+              root={workspaceRoot}
+              activePath={active?.path ?? null}
+              onOpen={openFile}
+              onPathChanged={onPathChanged}
+            />
           </div>
-          {workspaceRoot && (
-            <div className="ws-root" title={workspaceRoot}>
-              {workspaceRoot}
-            </div>
-          )}
-          <FileTree
-            ref={fileTreeRef}
-            root={workspaceRoot}
-            activePath={active?.path ?? null}
-            onOpen={openFile}
-            onPathChanged={onPathChanged}
-          />
+          <div className="sidebar-section sidebar-section--vars">
+            <VariableExplorer variables={variables} onRefresh={inspect} onShow={run} />
+          </div>
         </aside>
 
         <section className="pane pane--editor">

@@ -6,7 +6,9 @@ Fases seguintes vão generalizar para múltiplos kernels (um por documento/proje
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import json
 import os
 import sys
 from queue import Empty
@@ -39,6 +41,21 @@ def _ensure_kernelspec() -> str:
         return KERNEL_NAME
     except Exception:  # noqa: BLE001 - fallback resiliente para o spike
         return "python3"
+
+
+def _parse_inspect(text_plain: str) -> list[dict[str, Any]]:
+    """O resultado de user_expressions vem como repr(str) em text/plain.
+
+    Ex.: ``"'[{...}]'"`` -> desembrulha o literal Python -> json.loads.
+    """
+    if not text_plain:
+        return []
+    try:
+        inner = ast.literal_eval(text_plain)  # repr de string -> string
+        data = json.loads(inner)
+        return data if isinstance(data, list) else []
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def _translate_iopub(msg: dict[str, Any]) -> dict[str, Any] | None:
@@ -169,6 +186,36 @@ class KernelSession:
             }
         except (Empty, asyncio.TimeoutError):
             pass
+
+    async def inspect(self) -> list[dict[str, Any]]:
+        """Lista as variáveis do namespace via user_expressions (out-of-band).
+
+        Usa uma execução silenciosa com código vazio: não cria In[n] nem saída,
+        e o resultado da expressão volta no execute_reply.
+        """
+        if self._km is None:
+            return []
+        client = self._client
+        msg_id = client.execute(
+            "",
+            silent=True,
+            store_history=False,
+            allow_stdin=False,
+            user_expressions={"v": '__import__("pykortex")._inspect_json()'},
+        )
+        for _ in range(50):
+            try:
+                reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
+            except (Empty, asyncio.TimeoutError):
+                continue
+            if reply.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+            result = reply["content"].get("user_expressions", {}).get("v", {})
+            if result.get("status") != "ok":
+                return []
+            text = result.get("data", {}).get("text/plain", "")
+            return _parse_inspect(text)
+        return []
 
     async def interrupt(self) -> None:
         if self._km is not None:
