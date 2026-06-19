@@ -126,6 +126,60 @@ button:disabled {
   cursor: default;
 }
 
+/* abas */
+.tabbar {
+  display: flex;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  min-height: 30px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.tab--active {
+  background: var(--bg);
+  color: var(--fg);
+  border-top: 2px solid var(--accent);
+}
+.tab__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab__close {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.tab__close:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.pane__subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
 .editor-host {
   flex: 1;
   min-height: 0;
@@ -231,6 +285,22 @@ button:disabled {
   direction: rtl;
   text-align: left;
 }
+.tree-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tree-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.tree-toolbar button {
+  padding: 1px 6px;
+  font-size: 11px;
+}
 .tree {
   flex: 1;
   overflow: auto;
@@ -272,6 +342,54 @@ button:disabled {
 .tree-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.tree-row--input {
+  cursor: default;
+}
+.tree-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 0 4px;
+  outline: none;
+}
+
+/* menu de contexto */
+.ctx-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+.ctx-menu button {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.ctx-menu button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.ctx-menu .ctx-danger:hover {
+  background: var(--error);
+}
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
 }
 
 .filetab {

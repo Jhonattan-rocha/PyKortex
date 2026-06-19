@@ -7,6 +7,7 @@ Isso mantém o engine seguro mesmo que a UI mande um caminho inesperado.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 # Diretórios ruidosos que não interessam na árvore de arquivos.
@@ -82,6 +83,49 @@ class WorkspaceManager:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="")
         return {"path": rel, "bytes": len(content.encode("utf-8"))}
+
+    def create(self, rel: str, kind: str) -> dict:
+        """Cria um arquivo vazio ou um diretório. Erro se já existir."""
+        if not rel.strip():
+            raise WorkspaceError("nome vazio")
+        target = self.resolve(rel)
+        if target.exists():
+            raise WorkspaceError(f"já existe: {rel}")
+        if kind == "dir":
+            target.mkdir(parents=True, exist_ok=False)
+        elif kind == "file":
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("", encoding="utf-8")
+        else:
+            raise WorkspaceError(f"tipo inválido: {kind}")
+        return {"path": rel, "type": kind}
+
+    def rename(self, rel: str, to: str) -> dict:
+        """Renomeia/move dentro do workspace."""
+        src = self.resolve(rel)
+        dst = self.resolve(to)
+        if src == self._require_root():
+            raise WorkspaceError("não é possível renomear o root")
+        if not src.exists():
+            raise WorkspaceError(f"não existe: {rel}")
+        if dst.exists():
+            raise WorkspaceError(f"destino já existe: {to}")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        src.rename(dst)
+        return {"path": to}
+
+    def delete(self, rel: str) -> dict:
+        """Apaga um arquivo ou diretório (recursivo)."""
+        target = self.resolve(rel)
+        if target == self._require_root():
+            raise WorkspaceError("não é possível apagar o root")
+        if not target.exists():
+            raise WorkspaceError(f"não existe: {rel}")
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+        return {"path": rel}
 
 
 _workspace: WorkspaceManager | None = None

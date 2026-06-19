@@ -4,14 +4,10 @@ import type { KernelState, OutputMessage, ServerMessage } from './protocol'
 export type ConnState = 'connecting' | 'open' | 'closed' | 'error'
 
 export interface Execution {
-  /** id local incremental (ordem de envio) */
   id: number
-  /** código submetido (célula ou arquivo) */
   code: string
   status: 'running' | 'ok' | 'error' | 'aborted'
-  /** contador do kernel (In [n]); null enquanto não chega o reply */
   executionCount: number | null
-  /** saídas do bloco (stream/result/display/error) */
   outputs: OutputMessage[]
 }
 
@@ -27,13 +23,11 @@ export interface UseEngine {
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
+const MAX_BACKOFF_MS = 5000
 
 /**
- * Conecta ao /ws/execute e organiza a saída em EXECUÇÕES (estilo REPL).
- *
- * Atribuição FIFO: o backend processa um execute_request por vez e em ordem,
- * então mantemos uma fila de ids pendentes e roteamos toda saída para a cabeça
- * da fila, avançando quando chega o execute_reply correspondente.
+ * Conecta ao /ws/execute, organiza a saída em EXECUÇÕES (estilo REPL) e
+ * reconecta automaticamente (backoff exponencial) se a conexão cair.
  */
 export function useEngine(): UseEngine {
   const wsRef = useRef<WebSocket | null>(null)
@@ -51,26 +45,23 @@ export function useEngine(): UseEngine {
   useEffect(() => {
     let cancelled = false
     let ws: WebSocket | null = null
+    let retry = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
 
-    async function connect(): Promise<void> {
-      const info = await window.pykortex.getEngineInfo()
+    function scheduleRetry(): void {
       if (cancelled) return
-      if (!info.ok) {
-        setConn('error')
-        setErrorText(info.error)
-        return
-      }
+      const delay = Math.min(500 * 2 ** retry, MAX_BACKOFF_MS)
+      retry += 1
+      timer = setTimeout(connect, delay)
+    }
 
-      ws = new WebSocket(`ws://${info.host}:${info.port}/ws/execute`)
-      wsRef.current = ws
-
-      ws.onopen = () => setConn('open')
-      ws.onclose = () => setConn('closed')
-      ws.onerror = () => {
-        setConn('error')
-        setErrorText('falha na conexão WebSocket com o engine')
-      }
-      ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data) as ServerMessage)
+    function abortPending(): void {
+      const ids = new Set(pending.current)
+      pending.current = []
+      if (ids.size === 0) return
+      setExecutions((prev) =>
+        prev.map((ex) => (ids.has(ex.id) && ex.status === 'running' ? { ...ex, status: 'aborted' } : ex))
+      )
     }
 
     function handleMessage(msg: ServerMessage): void {
@@ -86,9 +77,8 @@ export function useEngine(): UseEngine {
         setErrorText(msg.message)
         return
       }
-
       const head = pending.current[0]
-      if (head === undefined) return // saída sem execução associada
+      if (head === undefined) return
 
       if (msg.type === 'execute_reply') {
         patch(head, (ex) => ({
@@ -99,11 +89,9 @@ export function useEngine(): UseEngine {
         pending.current.shift()
         return
       }
-
       if (OUTPUT_TYPES.has(msg.type)) {
         const out = msg as OutputMessage
-        const count =
-          out.type === 'execute_result' ? out.execution_count : null
+        const count = out.type === 'execute_result' ? out.execution_count : null
         patch(head, (ex) => ({
           ...ex,
           outputs: [...ex.outputs, out],
@@ -112,9 +100,43 @@ export function useEngine(): UseEngine {
       }
     }
 
+    async function connect(): Promise<void> {
+      if (cancelled) return
+      setConn('connecting')
+      const info = await window.pykortex.getEngineInfo()
+      if (cancelled) return
+      if (!info.ok) {
+        setConn('error')
+        setErrorText(info.error)
+        scheduleRetry()
+        return
+      }
+
+      ws = new WebSocket(`ws://${info.host}:${info.port}/ws/execute`)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        retry = 0
+        setConn('open')
+        setErrorText(null)
+      }
+      ws.onclose = () => {
+        if (cancelled) return
+        setConn('closed')
+        setKernel('starting')
+        abortPending()
+        scheduleRetry()
+      }
+      ws.onerror = () => {
+        // onclose dispara em seguida e cuida do retry
+      }
+      ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data) as ServerMessage)
+    }
+
     connect()
     return () => {
       cancelled = true
+      if (timer) clearTimeout(timer)
       ws?.close()
     }
   }, [])

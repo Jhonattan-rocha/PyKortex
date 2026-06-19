@@ -42,6 +42,46 @@ def test_fs_roundtrip() -> None:
         assert r.status_code == 400, r.text
 
 
+def test_fs_create_rename_delete() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        client = TestClient(app)
+        client.post("/fs/workspace", json={"root": str(root)})
+
+        # cria pasta e arquivo
+        assert client.post("/fs/create", json={"path": "pkg", "type": "dir"}).status_code == 200
+        assert (root / "pkg").is_dir()
+        assert (
+            client.post("/fs/create", json={"path": "pkg/mod.py", "type": "file"}).status_code
+            == 200
+        )
+        assert (root / "pkg" / "mod.py").is_file()
+
+        # criar de novo -> 400 (já existe)
+        assert client.post("/fs/create", json={"path": "pkg", "type": "dir"}).status_code == 400
+
+        # renomeia/move
+        assert (
+            client.post("/fs/rename", json={"path": "pkg/mod.py", "to": "pkg/main.py"}).status_code
+            == 200
+        )
+        assert not (root / "pkg" / "mod.py").exists()
+        assert (root / "pkg" / "main.py").is_file()
+
+        # apaga pasta recursivamente
+        assert client.post("/fs/delete", json={"path": "pkg"}).status_code == 200
+        assert not (root / "pkg").exists()
+
+        # não pode apagar o root
+        assert client.post("/fs/delete", json={"path": ""}).status_code == 400
+
+        # confinamento em create
+        assert (
+            client.post("/fs/create", json={"path": "../x.txt", "type": "file"}).status_code == 400
+        )
+
+
 if __name__ == "__main__":
     test_fs_roundtrip()
+    test_fs_create_rename_delete()
     print("FS_OK")

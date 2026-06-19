@@ -12,6 +12,8 @@ export interface EditorProps {
   onRun: (code: string) => void
   /** salva o conteúdo atual (Ctrl/Cmd+S) */
   onSave: (code: string) => void
+  /** id/caminho da aba ativa: cria um model dedicado por arquivo (preserva undo/cursor) */
+  path?: string
 }
 
 /**
@@ -23,7 +25,7 @@ export interface EditorProps {
  * Os comandos leem o modelo e o callback via refs, então nunca capturam
  * estado/props velhos (o onMount roda só uma vez).
  */
-export function CodeEditor({ value, onChange, onRun, onSave }: EditorProps): JSX.Element {
+export function CodeEditor({ value, onChange, onRun, onSave, path }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
   const onRunRef = useRef(onRun)
   onRunRef.current = onRun
@@ -83,6 +85,7 @@ export function CodeEditor({ value, onChange, onRun, onSave }: EditorProps): JSX
       height="100%"
       language="python"
       theme="vs-dark"
+      path={path}
       value={value}
       onChange={(v) => onChange(v ?? '')}
       onMount={handleMount}

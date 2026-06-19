@@ -73,3 +73,26 @@ export async function writeFile(path: string, content: string): Promise<void> {
     })
   )
 }
+
+async function post(path: string, body: unknown): Promise<void> {
+  const base = await baseUrl()
+  await unwrap(
+    await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+  )
+}
+
+export async function createEntry(path: string, type: 'file' | 'dir'): Promise<void> {
+  await post('/fs/create', { path, type })
+}
+
+export async function renameEntry(path: string, to: string): Promise<void> {
+  await post('/fs/rename', { path, to })
+}
+
+export async function deleteEntry(path: string): Promise<void> {
+  await post('/fs/delete', { path })
+}

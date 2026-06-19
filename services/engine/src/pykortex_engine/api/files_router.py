@@ -20,6 +20,20 @@ class WriteBody(BaseModel):
     content: str
 
 
+class CreateBody(BaseModel):
+    path: str
+    type: str  # "file" | "dir"
+
+
+class RenameBody(BaseModel):
+    path: str
+    to: str
+
+
+class DeleteBody(BaseModel):
+    path: str
+
+
 def _guard(fn):  # pequeno helper p/ traduzir WorkspaceError -> 400
     try:
         return fn()
@@ -54,3 +68,18 @@ async def read_file(path: str) -> dict:
 @router.put("/write")
 async def write_file(body: WriteBody) -> dict:
     return _guard(lambda: get_workspace().write_file(body.path, body.content))
+
+
+@router.post("/create")
+async def create(body: CreateBody) -> dict:
+    return _guard(lambda: get_workspace().create(body.path, body.type))
+
+
+@router.post("/rename")
+async def rename(body: RenameBody) -> dict:
+    return _guard(lambda: get_workspace().rename(body.path, body.to))
+
+
+@router.post("/delete")
+async def delete(body: DeleteBody) -> dict:
+    return _guard(lambda: get_workspace().delete(body.path))
