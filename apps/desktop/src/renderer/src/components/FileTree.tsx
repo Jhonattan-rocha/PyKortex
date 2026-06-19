@@ -209,7 +209,8 @@ export const FileTree = forwardRef<FileTreeHandle, TreeProps>(function FileTree(
     commitRename,
     commitCreate,
     cancelCreate: () => setCreating(null),
-    cancelRename: () => setRenaming(null)
+    cancelRename: () => setRenaming(null),
+    del: (path) => void doDelete(path)
   }
 
   return (
@@ -281,6 +282,7 @@ interface NodeCtrl {
   commitCreate: (name: string) => void
   cancelCreate: () => void
   cancelRename: () => void
+  del: (path: string) => void
 }
 
 function FileNode({
@@ -314,10 +316,23 @@ function FileNode({
       <div
         className={`tree-row${isActive ? ' tree-row--active' : ''}`}
         style={{ paddingLeft: pad }}
+        tabIndex={0}
         onClick={() => (isDir ? ctrl.toggle(entry.path) : ctrl.onOpen(entry.path))}
         onContextMenu={(e) => {
           e.preventDefault()
           ctrl.openMenu(entry.path, entry.type, e.clientX, e.clientY)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Delete') {
+            e.preventDefault()
+            ctrl.del(entry.path)
+          } else if (e.key === 'F2') {
+            e.preventDefault()
+            ctrl.startRename(entry.path)
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            isDir ? ctrl.toggle(entry.path) : ctrl.onOpen(entry.path)
+          }
         }}
         title={entry.path}
       >
@@ -357,23 +372,40 @@ function CreateInput({
   onCancel: () => void
 }): JSX.Element {
   const ref = useRef<HTMLInputElement | null>(null)
+  const [value, setValue] = useState(initial)
+  const done = useRef(false) // evita commit duplo (Enter + blur)
+
   useEffect(() => {
     ref.current?.focus()
     ref.current?.select()
   }, [])
+
+  const commit = (): void => {
+    if (done.current) return
+    done.current = true
+    onCommit(value)
+  }
+  const cancel = (): void => {
+    if (done.current) return
+    done.current = true
+    onCancel()
+  }
+
   return (
     <div className="tree-row tree-row--input" style={{ paddingLeft: 8 + depth * 14 }}>
       <span className="tree-icon">{type === 'dir' ? '▸' : '·'}</span>
       <input
         ref={ref}
         className="tree-input"
-        defaultValue={initial}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         placeholder={type === 'dir' ? 'nome da pasta' : 'nome do arquivo'}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') onCommit((e.target as HTMLInputElement).value)
-          else if (e.key === 'Escape') onCancel()
+          e.stopPropagation()
+          if (e.key === 'Enter') commit()
+          else if (e.key === 'Escape') cancel()
         }}
-        onBlur={(e) => onCommit(e.target.value)}
+        onBlur={commit}
       />
     </div>
   )

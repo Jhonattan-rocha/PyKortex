@@ -330,6 +330,11 @@ button:disabled {
 .tree-row--active {
   background: rgba(14, 159, 110, 0.18);
 }
+.tree-row:focus {
+  outline: none;
+  background: rgba(86, 156, 214, 0.22);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .tree-row--muted {
   color: var(--fg-dim);
   cursor: default;
@@ -356,6 +361,9 @@ button:disabled {
   font-size: 12px;
   padding: 0 4px;
   outline: none;
+  /* o .tree usa user-select:none, que é herdado e trava o cursor do input */
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* menu de contexto */
