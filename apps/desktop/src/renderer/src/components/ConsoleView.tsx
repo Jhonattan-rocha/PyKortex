@@ -59,6 +59,18 @@ function OutputItem({ msg }: { msg: OutputMessage }): JSX.Element | null {
       if (df && df.kind === 'dataframe') {
         return <DataFrameView df={df} />
       }
+      // imagens (matplotlib etc.): png/jpeg vêm em base64; svg vem como texto
+      const png = data['image/png']
+      const jpeg = data['image/jpeg']
+      if (typeof png === 'string' || typeof jpeg === 'string') {
+        const mime = typeof png === 'string' ? 'image/png' : 'image/jpeg'
+        const b64 = (typeof png === 'string' ? png : jpeg) as string
+        return <img className="out out--img" src={`data:${mime};base64,${b64}`} alt="figura" />
+      }
+      const svg = data['image/svg+xml']
+      if (typeof svg === 'string') {
+        return <div className="out out--img" dangerouslySetInnerHTML={{ __html: svg }} />
+      }
       const html = data['text/html']
       if (typeof html === 'string') {
         // kernel local de confiança nesta fase; sanitização entra depois

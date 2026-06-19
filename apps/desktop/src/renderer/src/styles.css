@@ -268,6 +268,13 @@ button:disabled {
 .out--error {
   color: var(--error);
 }
+.out--img {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0;
+  background: #fff;
+  border-radius: 4px;
+}
 
 /* sidebar / árvore */
 .pane--sidebar {
