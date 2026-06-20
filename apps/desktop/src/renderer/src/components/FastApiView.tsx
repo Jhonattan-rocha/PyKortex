@@ -1,7 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ApiRequestOpts, ApiResponse, FastApiPayload, FastApiRoute } from '../engine/protocol'
+import {
+  loadCollections,
+  newId,
+  saveCollections,
+  type SavedRequest
+} from '../engine/collections'
 
 type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
+type OnSave = (name: string, opts: ApiRequestOpts) => void
 
 interface HistoryEntry {
   id: number
@@ -20,6 +27,7 @@ export function FastApiView({
 }): JSX.Element {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const idRef = useRef(0)
+  const [collections, setCollections] = useState<SavedRequest[]>(() => loadCollections())
 
   // todo envio passa por aqui para ser registrado no histórico
   const send = useCallback(
@@ -33,6 +41,32 @@ export function FastApiView({
     [onRequest]
   )
 
+  const saveRequest = useCallback<OnSave>(
+    (name, opts) => {
+      const { handle: _drop, ...request } = opts
+      setCollections((c) => {
+        const next = [
+          { id: newId(), name, appTitle: app.title, savedAt: Date.now(), request },
+          ...c
+        ]
+        saveCollections(next)
+        return next
+      })
+    },
+    [app.title]
+  )
+
+  const removeCollection = useCallback((id: string) => {
+    setCollections((c) => {
+      const next = c.filter((x) => x.id !== id)
+      saveCollections(next)
+      return next
+    })
+  }, [])
+
+  // só as coleções deste app (por título), para não misturar entre apps
+  const mine = collections.filter((c) => c.appTitle === app.title)
+
   return (
     <div className="fa">
       <div className="fa__head">
@@ -44,9 +78,16 @@ export function FastApiView({
       </div>
       <div className="fa__routes">
         {app.routes.map((r, i) => (
-          <RouteRow key={i} route={r} handle={app.handle} send={send} />
+          <RouteRow key={i} route={r} handle={app.handle} send={send} onSave={saveRequest} />
         ))}
       </div>
+      {mine.length > 0 && (
+        <Collections
+          items={mine}
+          onReplay={(s) => void send({ ...s.request, handle: app.handle })}
+          onRemove={removeCollection}
+        />
+      )}
       {history.length > 0 && <History entries={history} send={send} />}
     </div>
   )
@@ -55,11 +96,13 @@ export function FastApiView({
 function RouteRow({
   route,
   handle,
-  send
+  send,
+  onSave
 }: {
   route: FastApiRoute
   handle: string
   send: OnRequest
+  onSave: OnSave
 }): JSX.Element {
   const [open, setOpen] = useState(false)
   const [pathVals, setPathVals] = useState<Record<string, string>>({})
@@ -69,6 +112,7 @@ function RouteRow({
   const [bodyErr, setBodyErr] = useState<string | null>(null)
   const [resp, setResp] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [saveName, setSaveName] = useState<string | null>(null)
 
   const pathParams = route.params.filter((p) => p.in === 'path')
   const queryParams = route.params.filter((p) => p.in === 'query')
@@ -76,7 +120,8 @@ function RouteRow({
   const setHeader = (i: number, patch: Partial<{ k: string; v: string }>): void =>
     setHeaderRows((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
 
-  const doSend = async (): Promise<void> => {
+  /** Monta o request a partir do formulário; null se o body for JSON inválido. */
+  const buildOpts = (): ApiRequestOpts | null => {
     setBodyErr(null)
     let body: unknown
     const hasBody = Boolean(route.requestBody)
@@ -85,7 +130,7 @@ function RouteRow({
         body = bodyText.trim() ? JSON.parse(bodyText) : {}
       } catch (e) {
         setBodyErr(e instanceof Error ? e.message : 'JSON inválido')
-        return
+        return null
       }
     }
     let path = route.path
@@ -94,10 +139,22 @@ function RouteRow({
     }
     const headers: Record<string, string> = {}
     for (const { k, v } of headerRows) if (k.trim()) headers[k.trim()] = v
+    return { handle, method: route.method, path, query: queryVals, headers, body, hasBody }
+  }
 
+  const doSend = async (): Promise<void> => {
+    const opts = buildOpts()
+    if (!opts) return
     setLoading(true)
-    setResp(await send({ handle, method: route.method, path, query: queryVals, headers, body, hasBody }))
+    setResp(await send(opts))
     setLoading(false)
+  }
+
+  const commitSave = (): void => {
+    const name = (saveName ?? '').trim()
+    const opts = buildOpts()
+    if (name && opts) onSave(name, opts)
+    setSaveName(null)
   }
 
   return (
@@ -202,9 +259,36 @@ function RouteRow({
             </div>
           )}
 
-          <button className="fa-send" onClick={() => void doSend()} disabled={loading}>
-            {loading ? 'enviando…' : `Enviar ${route.method}`}
-          </button>
+          <div className="fa-actions">
+            <button className="fa-send" onClick={() => void doSend()} disabled={loading}>
+              {loading ? 'enviando…' : `Enviar ${route.method}`}
+            </button>
+            {saveName === null ? (
+              <button className="fa-add" onClick={() => setSaveName('')}>
+                ★ Salvar
+              </button>
+            ) : (
+              <span className="fa-save-row">
+                <input
+                  className="fa-input"
+                  autoFocus
+                  placeholder="nome do request"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitSave()
+                    else if (e.key === 'Escape') setSaveName(null)
+                  }}
+                />
+                <button className="fa-add" onClick={commitSave}>
+                  ok
+                </button>
+                <button className="fa-x" onClick={() => setSaveName(null)}>
+                  ×
+                </button>
+              </span>
+            )}
+          </div>
 
           {resp && <ResponseView resp={resp} />}
 
@@ -222,6 +306,43 @@ function RouteRow({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function Collections({
+  items,
+  onReplay,
+  onRemove
+}: {
+  items: SavedRequest[]
+  onReplay: (s: SavedRequest) => void
+  onRemove: (id: string) => void
+}): JSX.Element {
+  return (
+    <div className="fa-history">
+      <div className="fa-block__title">Coleções salvas</div>
+      {items.map((s) => (
+        <div key={s.id} className="fa-hist">
+          <div className="fa-hist__row" onClick={() => onReplay(s)} title="reenviar este request">
+            <span className={`fa-method fa-method--${s.request.method.toLowerCase()}`}>
+              {s.request.method}
+            </span>
+            <span className="fa-col-name">{s.name}</span>
+            <span className="fa-path">{s.request.path}</span>
+            <button
+              className="fa-x"
+              title="excluir"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                onRemove(s.id)
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

@@ -883,8 +883,24 @@ button:disabled {
   color: var(--error);
 }
 
-.fa-send {
+.fa-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 8px 0;
+}
+.fa-save-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+.fa-col-name {
+  font-weight: 600;
+  color: var(--fg);
+}
+.fa-send {
+  margin: 0;
   background: var(--accent);
   color: #fff;
   border: none;
