@@ -2,6 +2,7 @@
 name = "pykortex-engine"
 version = "0.0.0"
 description = "PyKortex backend - FastAPI + Jupyter kernel orchestration"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",

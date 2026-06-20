@@ -2,7 +2,8 @@
   "name": "pykortex",
   "version": "0.0.0",
   "private": true,
-  "description": "PyKortex - IDE de análise de dados com motor Python (Jupyter kernels)",
+  "description": "PyKortex - IDE Python viva e extensível (Jupyter kernels)",
+  "license": "GPL-3.0-or-later",
   "workspaces": [
     "apps/*",
     "packages/*"

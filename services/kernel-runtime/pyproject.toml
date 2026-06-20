@@ -2,6 +2,7 @@
 name = "pykortex"
 version = "0.0.0"
 description = "PyKortex in-kernel runtime API: viewers, commands e display rico"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 # pandas + matplotlib são as integrações de dados iniciais; ipython vem com o ipykernel.
 dependencies = ["pandas>=2.0", "matplotlib>=3.7"]
