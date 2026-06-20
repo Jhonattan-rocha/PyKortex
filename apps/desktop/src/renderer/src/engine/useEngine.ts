@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  ApiRequestOpts,
+  ApiResponse,
   DfPage,
   DfView,
   KernelState,
@@ -31,6 +33,7 @@ export interface UseEngine {
   inspect: () => void
   clearVars: () => void
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
+  requestApp: (opts: ApiRequestOpts) => Promise<ApiResponse>
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
@@ -45,6 +48,7 @@ export function useEngine(): UseEngine {
   const idCounter = useRef(0)
   const pending = useRef<number[]>([]) // fila FIFO de ids aguardando reply
   const pageReqs = useRef<Map<number, (page: DfPage) => void>>(new Map())
+  const apiReqs = useRef<Map<number, (res: ApiResponse) => void>>(new Map())
   const reqCounter = useRef(0)
 
   const [conn, setConn] = useState<ConnState>('connecting')
@@ -107,6 +111,14 @@ export function useEngine(): UseEngine {
             rows: msg.error ? [] : (msg.rows ?? []),
             total: msg.total ?? 0
           })
+        }
+        return
+      }
+      if (msg.type === 'api_response') {
+        const resolve = apiReqs.current.get(msg.reqId)
+        if (resolve) {
+          apiReqs.current.delete(msg.reqId)
+          resolve(msg.response ?? {})
         }
         return
       }
@@ -240,6 +252,21 @@ export function useEngine(): UseEngine {
     []
   )
 
+  const requestApp = useCallback((opts: ApiRequestOpts): Promise<ApiResponse> => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return Promise.resolve({ error: 'sem conexão com o engine' })
+    }
+    const reqId = ++reqCounter.current
+    return new Promise<ApiResponse>((resolve) => {
+      apiReqs.current.set(reqId, resolve)
+      ws.send(JSON.stringify({ type: 'api_request', reqId, ...opts }))
+      setTimeout(() => {
+        if (apiReqs.current.delete(reqId)) resolve({ error: 'timeout' })
+      }, 30000)
+    })
+  }, [])
+
   return {
     conn,
     kernel,
@@ -252,6 +279,7 @@ export function useEngine(): UseEngine {
     clear,
     inspect,
     clearVars,
-    pageDataFrame
+    pageDataFrame,
+    requestApp
   }
 }

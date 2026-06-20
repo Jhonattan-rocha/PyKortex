@@ -3,6 +3,8 @@ import type { Execution } from '../engine/useEngine'
 import {
   DATAFRAME_MIME,
   FASTAPI_MIME,
+  type ApiRequestOpts,
+  type ApiResponse,
   type DataFramePayload,
   type DfPage,
   type DfView,
@@ -13,14 +15,17 @@ import { DataFrameView } from './DataFrameView'
 import { FastApiView } from './FastApiView'
 
 type FetchPage = (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
+type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
 
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
 export function ConsoleView({
   executions,
-  fetchPage
+  fetchPage,
+  onRequest
 }: {
   executions: Execution[]
   fetchPage: FetchPage
+  onRequest: OnRequest
 }): JSX.Element {
   const endRef = useRef<HTMLDivElement | null>(null)
 
@@ -37,14 +42,22 @@ export function ConsoleView({
   return (
     <div className="console">
       {executions.map((ex) => (
-        <ExecutionBlock key={ex.id} ex={ex} fetchPage={fetchPage} />
+        <ExecutionBlock key={ex.id} ex={ex} fetchPage={fetchPage} onRequest={onRequest} />
       ))}
       <div ref={endRef} />
     </div>
   )
 }
 
-function ExecutionBlock({ ex, fetchPage }: { ex: Execution; fetchPage: FetchPage }): JSX.Element {
+function ExecutionBlock({
+  ex,
+  fetchPage,
+  onRequest
+}: {
+  ex: Execution
+  fetchPage: FetchPage
+  onRequest: OnRequest
+}): JSX.Element {
   const label = ex.executionCount != null ? `In [${ex.executionCount}]` : 'In [*]'
   return (
     <div className={`exec exec--${ex.status}`}>
@@ -57,14 +70,22 @@ function ExecutionBlock({ ex, fetchPage }: { ex: Execution; fetchPage: FetchPage
       <pre className="exec__code">{ex.code.trim()}</pre>
       <div className="exec__out">
         {ex.outputs.map((o, i) => (
-          <OutputItem key={i} msg={o} fetchPage={fetchPage} />
+          <OutputItem key={i} msg={o} fetchPage={fetchPage} onRequest={onRequest} />
         ))}
       </div>
     </div>
   )
 }
 
-function OutputItem({ msg, fetchPage }: { msg: OutputMessage; fetchPage: FetchPage }): JSX.Element | null {
+function OutputItem({
+  msg,
+  fetchPage,
+  onRequest
+}: {
+  msg: OutputMessage
+  fetchPage: FetchPage
+  onRequest: OnRequest
+}): JSX.Element | null {
   switch (msg.type) {
     case 'stream':
       return <pre className={`out out--stream out--${msg.name}`}>{msg.text}</pre>
@@ -78,7 +99,7 @@ function OutputItem({ msg, fetchPage }: { msg: OutputMessage; fetchPage: FetchPa
       }
       const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
       if (fa && fa.kind === 'fastapi') {
-        return <FastApiView app={fa} />
+        return <FastApiView app={fa} onRequest={onRequest} />
       }
       // imagens (matplotlib etc.): png/jpeg vêm em base64; svg vem como texto
       const png = data['image/png']

@@ -74,6 +74,19 @@ async def execute_ws(websocket: WebSocket) -> None:
                 await websocket.send_json(
                     {"type": "variables", "variables": variables, "cleared": cleared}
                 )
+            elif msg_type == "api_request":
+                response = await session.request_app(
+                    msg.get("handle", ""),
+                    msg.get("method", "GET"),
+                    msg.get("path", "/"),
+                    msg.get("query") or {},
+                    msg.get("headers") or {},
+                    msg.get("body"),
+                    msg.get("hasBody", False),
+                )
+                await websocket.send_json(
+                    {"type": "api_response", "reqId": msg.get("reqId"), "response": response}
+                )
             elif msg_type == "df_page":
                 sort = msg.get("sort") or {}
                 result = await session.page(

@@ -8,6 +8,9 @@ Importado condicionalmente por runtime.activate (só se fastapi estiver instalad
 
 from __future__ import annotations
 
+import json
+import time
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import FastAPI
@@ -18,6 +21,81 @@ from pykortex.mime import FASTAPI_MIME
 
 # Rotas que o FastAPI cria sozinho para docs — escondidas para focar na API.
 _SKIP_PATHS = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+
+# Apps registrados por handle (para o cliente embutido de request).
+_APPS: "OrderedDict[str, FastAPI]" = OrderedDict()
+_CLIENTS: dict[str, Any] = {}
+_app_counter = 0
+
+
+def _register_app(app: FastAPI) -> str:
+    global _app_counter
+    _app_counter += 1
+    handle = f"app{_app_counter}"
+    _APPS[handle] = app
+    _APPS.move_to_end(handle)
+    while len(_APPS) > 8:
+        old, _ = _APPS.popitem(last=False)
+        _CLIENTS.pop(old, None)
+    return handle
+
+
+def request_json(handle: str, args_json: str) -> str:
+    """Dispara um request contra o app vivo (TestClient, in-process) e retorna JSON.
+
+    args_json: {"method","path","query","headers","body","has_body"}.
+    """
+    app = _APPS.get(handle)
+    if app is None:
+        return json.dumps({"error": "app expirado — re-exiba o app"})
+    try:
+        args = json.loads(args_json)
+    except Exception:  # noqa: BLE001
+        args = {}
+
+    method = (args.get("method") or "GET").upper()
+    path = args.get("path") or "/"
+    query = {k: v for k, v in (args.get("query") or {}).items() if v != ""}
+    headers = args.get("headers") or {}
+
+    try:
+        from fastapi.testclient import TestClient
+
+        client = _CLIENTS.get(handle)
+        if client is None:
+            client = TestClient(app, raise_server_exceptions=False)
+            _CLIENTS[handle] = client
+
+        kwargs: dict[str, Any] = {}
+        if query:
+            kwargs["params"] = query
+        if headers:
+            kwargs["headers"] = headers
+        if args.get("has_body"):
+            kwargs["json"] = args.get("body")
+
+        t0 = time.perf_counter()
+        resp = client.request(method, path, **kwargs)
+        elapsed = (time.perf_counter() - t0) * 1000
+
+        try:
+            body_text = json.dumps(resp.json(), indent=2, ensure_ascii=False, default=str)
+            is_json = True
+        except Exception:  # noqa: BLE001
+            body_text = resp.text
+            is_json = False
+
+        return json.dumps(
+            {
+                "status": resp.status_code,
+                "elapsed_ms": round(elapsed, 1),
+                "headers": dict(resp.headers),
+                "body": body_text[:200_000],
+                "is_json": is_json,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
 
 
 def _schema_name(schema: dict[str, Any]) -> str | None:
@@ -90,6 +168,7 @@ def build_fastapi_payload(app: FastAPI) -> dict[str, Any]:
 
     return {
         "kind": "fastapi",
+        "handle": _register_app(app),
         "title": info.get("title", "FastAPI"),
         "version": info.get("version", ""),
         "count": len(routes),

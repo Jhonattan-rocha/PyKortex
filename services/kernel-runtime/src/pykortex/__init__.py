@@ -32,5 +32,13 @@ __all__ = [
     "_inspect_json",
     "_page_json",
     "_clear_namespace_json",
+    "_request_json",
 ]
 __version__ = "0.0.0"
+
+
+def _request_json(handle: str, args_json: str) -> str:
+    """Proxy lazy para fastapi_view.request_json (fastapi pode não estar instalado)."""
+    from pykortex.fastapi_view import request_json
+
+    return request_json(handle, args_json)

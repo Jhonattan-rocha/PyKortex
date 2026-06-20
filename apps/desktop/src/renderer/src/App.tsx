@@ -63,7 +63,8 @@ export function App(): JSX.Element {
     clear,
     inspect,
     clearVars,
-    pageDataFrame
+    pageDataFrame,
+    requestApp
   } = useEngine()
 
   const [tabs, setTabs] = useState<Tab[]>([newScratch()])
@@ -436,7 +437,7 @@ export function App(): JSX.Element {
             <span>Console</span>
           </div>
           {errorText && <div className="banner banner--error">{errorText}</div>}
-          <ConsoleView executions={executions} fetchPage={pageDataFrame} />
+          <ConsoleView executions={executions} fetchPage={pageDataFrame} onRequest={requestApp} />
         </section>
       </main>
     </div>

@@ -64,6 +64,7 @@ export type DfRowsMsg = {
   total?: number
   error?: string | null
 }
+export type ApiResponseMsg = { type: 'api_response'; reqId: number; response: ApiResponse }
 /** Resultado de uma página: linhas + total da view (filtrada). */
 export interface DfPage {
   rows: DfRow[]
@@ -85,6 +86,7 @@ export type ServerMessage =
   | RestartedMsg
   | VariablesMsg
   | DfRowsMsg
+  | ApiResponseMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg
@@ -106,10 +108,28 @@ export interface FastApiRoute {
 }
 export interface FastApiPayload {
   kind: 'fastapi'
+  handle: string
   title: string
   version: string
   count: number
   routes: FastApiRoute[]
+}
+export interface ApiResponse {
+  status?: number
+  elapsed_ms?: number
+  headers?: Record<string, string>
+  body?: string
+  is_json?: boolean
+  error?: string
+}
+export interface ApiRequestOpts {
+  handle: string
+  method: string
+  path: string
+  query?: Record<string, string>
+  headers?: Record<string, string>
+  body?: unknown
+  hasBody?: boolean
 }
 
 export interface DfRow {

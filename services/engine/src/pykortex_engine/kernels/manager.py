@@ -246,6 +246,31 @@ class KernelSession:
         data = await self._eval_expr('__import__("pykortex")._clear_namespace_json()')
         return data.get("cleared", 0) if isinstance(data, dict) else 0
 
+    async def request_app(
+        self,
+        handle: str,
+        method: str,
+        path: str,
+        query: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        body: Any = None,
+        has_body: bool = False,
+    ) -> dict[str, Any]:
+        """Dispara um request contra um app FastAPI cacheado (in-process)."""
+        args = json.dumps(
+            {
+                "method": method,
+                "path": path,
+                "query": query or {},
+                "headers": headers or {},
+                "body": body,
+                "has_body": bool(has_body),
+            }
+        )
+        expr = f'__import__("pykortex")._request_json({handle!r}, {args!r})'
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, dict) else {"error": "eval failed"}
+
     async def interrupt(self) -> None:
         if self._km is not None:
             await self._km.interrupt_kernel()

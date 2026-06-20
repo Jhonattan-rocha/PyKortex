@@ -764,6 +764,107 @@ button:disabled {
 .fa-resp__desc {
   color: var(--fg-dim);
 }
+.fa-block--responses {
+  margin-top: 8px;
+  opacity: 0.8;
+}
+
+/* try it: inputs + envio + resposta */
+.fa-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.fa-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  outline: none;
+  user-select: text;
+}
+.fa-input:focus {
+  border-color: var(--accent);
+}
+.fa-body {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px;
+  outline: none;
+  user-select: text;
+}
+.fa-body:focus {
+  border-color: var(--accent);
+}
+.fa-body-err {
+  color: var(--error);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.fa-send {
+  margin: 8px 0;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fa-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.fa-response {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.fa-response--err {
+  padding: 8px;
+  color: var(--error);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.fa-response__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+}
+.fa-status {
+  font-weight: 700;
+  font-family: var(--mono);
+}
+.fa-elapsed {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.fa-response__body {
+  margin: 0;
+  padding: 8px;
+  max-height: 260px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .banner {
   padding: 8px 12px;
