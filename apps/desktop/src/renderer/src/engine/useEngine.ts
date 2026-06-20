@@ -22,7 +22,12 @@ export interface UseEngine {
   restart: () => void
   clear: () => void
   inspect: () => void
-  pageDataFrame: (handle: string, start: number, end: number) => Promise<DfRow[]>
+  pageDataFrame: (
+    handle: string,
+    start: number,
+    end: number,
+    sort?: { col: string; dir: 'asc' | 'desc' } | null
+  ) => Promise<DfRow[]>
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
@@ -199,13 +204,18 @@ export function useEngine(): UseEngine {
   }, [])
 
   const pageDataFrame = useCallback(
-    (handle: string, start: number, end: number): Promise<DfRow[]> => {
+    (
+      handle: string,
+      start: number,
+      end: number,
+      sort?: { col: string; dir: 'asc' | 'desc' } | null
+    ): Promise<DfRow[]> => {
       const ws = wsRef.current
       if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve([])
       const reqId = ++reqCounter.current
       return new Promise<DfRow[]>((resolve) => {
         pageReqs.current.set(reqId, resolve)
-        ws.send(JSON.stringify({ type: 'df_page', reqId, handle, start, end }))
+        ws.send(JSON.stringify({ type: 'df_page', reqId, handle, start, end, sort: sort ?? null }))
         // failsafe: não deixa a promise pendurada se a resposta nunca vier
         setTimeout(() => {
           if (pageReqs.current.delete(reqId)) resolve([])

@@ -8,7 +8,12 @@ import {
 } from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
 
-type FetchPage = (handle: string, start: number, end: number) => Promise<DfRow[]>
+type FetchPage = (
+  handle: string,
+  start: number,
+  end: number,
+  sort?: { col: string; dir: 'asc' | 'desc' } | null
+) => Promise<DfRow[]>
 
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
 export function ConsoleView({

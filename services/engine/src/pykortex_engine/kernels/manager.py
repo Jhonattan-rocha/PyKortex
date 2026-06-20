@@ -221,12 +221,22 @@ class KernelSession:
             return _parse_inspect(text)
         return []
 
-    async def page(self, handle: str, start: int, end: int) -> dict[str, Any]:
+    async def page(
+        self,
+        handle: str,
+        start: int,
+        end: int,
+        sort_col: str | None = None,
+        sort_dir: str | None = None,
+    ) -> dict[str, Any]:
         """Recorta linhas [start:end) de um DataFrame cacheado (out-of-band)."""
         if self._km is None:
             return {"error": "no kernel"}
         client = self._client
-        expr = f'__import__("pykortex")._page_json({handle!r}, {int(start)}, {int(end)})'
+        expr = (
+            f'__import__("pykortex")._page_json('
+            f"{handle!r}, {int(start)}, {int(end)}, {sort_col!r}, {sort_dir!r})"
+        )
         msg_id = client.execute(
             "",
             silent=True,

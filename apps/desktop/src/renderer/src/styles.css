@@ -558,6 +558,16 @@ button:disabled {
   font-weight: 600;
   color: var(--fg);
 }
+.df__th--sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.df__th--sortable:hover {
+  background: var(--border);
+}
+.df__arrow {
+  color: var(--accent);
+}
 .df__dtype {
   font-weight: 400;
   font-size: 10px;

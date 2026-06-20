@@ -5,6 +5,7 @@ import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { CodeEditor } from './editor/Editor'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
+import { loadState, saveState } from './engine/persistence'
 
 const SAMPLE = `# %% imports
 import sys
@@ -261,6 +262,72 @@ export function App(): JSX.Element {
     const timer = setTimeout(() => void save(active.code), 800)
     return () => clearTimeout(timer)
   }, [autoSave, active, save])
+
+  // --- persistência do estado da IDE ---
+  const restored = useRef(false)
+
+  // restaura uma vez no mount (workspace + abas reabertas do disco + scratch)
+  useEffect(() => {
+    void (async () => {
+      const st = loadState()
+      if (st) {
+        if (st.workspaceRoot) {
+          try {
+            setWorkspaceRoot(await setWorkspace(st.workspaceRoot))
+          } catch {
+            /* pasta sumiu: segue sem workspace */
+          }
+        }
+        const tabsOut: Tab[] = []
+        for (const t of st.tabs) {
+          if (t.path === null) {
+            tabsOut.push({
+              id: SCRATCH_ID,
+              title: 'scratch',
+              path: null,
+              code: st.scratchCode,
+              saved: st.scratchCode
+            })
+          } else {
+            try {
+              const content = await readFile(t.path)
+              tabsOut.push({
+                id: t.path,
+                title: basename(t.path),
+                path: t.path,
+                code: content,
+                saved: content
+              })
+            } catch {
+              /* arquivo apagado/movido: ignora */
+            }
+          }
+        }
+        if (tabsOut.length === 0) tabsOut.push(newScratch())
+        setTabs(tabsOut)
+        setActiveId(
+          tabsOut.some((t) => t.id === st.activeId) ? st.activeId : tabsOut[tabsOut.length - 1].id
+        )
+        setAutoSave(st.autoSave)
+      }
+      restored.current = true
+    })()
+  }, [])
+
+  // salva (debounced) quando o estado relevante muda — só após restaurar
+  useEffect(() => {
+    if (!restored.current) return
+    const timer = setTimeout(() => {
+      saveState({
+        workspaceRoot,
+        tabs: tabs.map((t) => ({ id: t.id, path: t.path })),
+        scratchCode: tabs.find((t) => t.id === SCRATCH_ID)?.code ?? '',
+        activeId,
+        autoSave
+      })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [tabs, activeId, workspaceRoot, autoSave])
 
   return (
     <div className="app">

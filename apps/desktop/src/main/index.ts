@@ -1,6 +1,35 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { join, resolve } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { startEngine, stopEngine, type EngineHandle } from './engine'
+
+interface WindowState {
+  width: number
+  height: number
+  x?: number
+  y?: number
+  isMaximized?: boolean
+}
+
+const windowStateFile = (): string => join(app.getPath('userData'), 'window-state.json')
+
+function loadWindowState(): WindowState {
+  try {
+    return JSON.parse(readFileSync(windowStateFile(), 'utf-8')) as WindowState
+  } catch {
+    return { width: 1200, height: 800 }
+  }
+}
+
+function saveWindowState(win: BrowserWindow): void {
+  try {
+    const bounds = win.getNormalBounds()
+    const state: WindowState = { ...bounds, isMaximized: win.isMaximized() }
+    writeFileSync(windowStateFile(), JSON.stringify(state))
+  } catch {
+    /* best-effort */
+  }
+}
 
 let mainWindow: BrowserWindow | null = null
 let engine: EngineHandle | null = null
@@ -12,9 +41,12 @@ function repoRoot(): string {
 }
 
 function createWindow(): void {
+  const ws = loadWindowState()
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: ws.width,
+    height: ws.height,
+    x: ws.x,
+    y: ws.y,
     show: false,
     title: 'PyKortex',
     webPreferences: {
@@ -24,7 +56,9 @@ function createWindow(): void {
     }
   })
 
+  if (ws.isMaximized) mainWindow.maximize()
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('close', () => mainWindow && saveWindowState(mainWindow))
 
   // electron-vite injeta a URL do dev server; em prod carrega o build.
   const devUrl = process.env['ELECTRON_RENDERER_URL']

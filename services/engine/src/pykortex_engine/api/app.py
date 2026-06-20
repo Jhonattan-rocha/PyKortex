@@ -69,8 +69,13 @@ async def execute_ws(websocket: WebSocket) -> None:
                 variables = await session.inspect()
                 await websocket.send_json({"type": "variables", "variables": variables})
             elif msg_type == "df_page":
+                sort = msg.get("sort") or {}
                 result = await session.page(
-                    msg.get("handle", ""), msg.get("start", 0), msg.get("end", 0)
+                    msg.get("handle", ""),
+                    msg.get("start", 0),
+                    msg.get("end", 0),
+                    sort.get("col"),
+                    sort.get("dir"),
                 )
                 await websocket.send_json(
                     {
