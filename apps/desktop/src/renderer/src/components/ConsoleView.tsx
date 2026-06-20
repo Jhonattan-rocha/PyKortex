@@ -3,17 +3,13 @@ import type { Execution } from '../engine/useEngine'
 import {
   DATAFRAME_MIME,
   type DataFramePayload,
-  type DfRow,
+  type DfPage,
+  type DfView,
   type OutputMessage
 } from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
 
-type FetchPage = (
-  handle: string,
-  start: number,
-  end: number,
-  sort?: { col: string; dir: 'asc' | 'desc' } | null
-) => Promise<DfRow[]>
+type FetchPage = (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
 export function ConsoleView({

@@ -228,14 +228,19 @@ class KernelSession:
         end: int,
         sort_col: str | None = None,
         sort_dir: str | None = None,
+        filters: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Recorta linhas [start:end) de um DataFrame cacheado (out-of-band)."""
         if self._km is None:
             return {"error": "no kernel"}
         client = self._client
+        # filtros só com chaves/valores str; repr produz literal seguro p/ eval
+        safe_filters = {
+            str(k): str(v) for k, v in (filters or {}).items() if isinstance(v, str) and v
+        }
         expr = (
             f'__import__("pykortex")._page_json('
-            f"{handle!r}, {int(start)}, {int(end)}, {sort_col!r}, {sort_dir!r})"
+            f"{handle!r}, {int(start)}, {int(end)}, {sort_col!r}, {sort_dir!r}, {safe_filters!r})"
         )
         msg_id = client.execute(
             "",

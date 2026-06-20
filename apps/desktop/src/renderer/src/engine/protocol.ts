@@ -8,12 +8,15 @@ export type ExecuteRequest = { type: 'execute_request'; code: string }
 export type InterruptRequest = { type: 'interrupt' }
 export type RestartRequest = { type: 'restart' }
 export type InspectRequest = { type: 'inspect' }
+export type DfSort = { col: string; dir: 'asc' | 'desc' } | null
 export type DfPageRequest = {
   type: 'df_page'
   reqId: number
   handle: string
   start: number
   end: number
+  sort?: DfSort
+  filters?: Record<string, string>
 }
 export type ClientMessage =
   | ExecuteRequest
@@ -58,7 +61,17 @@ export type DfRowsMsg = {
   reqId: number
   rows: DfRow[]
   start: number
+  total?: number
   error?: string | null
+}
+/** Resultado de uma página: linhas + total da view (filtrada). */
+export interface DfPage {
+  rows: DfRow[]
+  total: number
+}
+export interface DfView {
+  sort?: DfSort
+  filters?: Record<string, string>
 }
 
 export type ServerMessage =

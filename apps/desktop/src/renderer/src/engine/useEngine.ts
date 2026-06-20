@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DfRow, KernelState, OutputMessage, ServerMessage, VariableInfo } from './protocol'
+import type {
+  DfPage,
+  DfView,
+  KernelState,
+  OutputMessage,
+  ServerMessage,
+  VariableInfo
+} from './protocol'
 
 export type ConnState = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -22,12 +29,7 @@ export interface UseEngine {
   restart: () => void
   clear: () => void
   inspect: () => void
-  pageDataFrame: (
-    handle: string,
-    start: number,
-    end: number,
-    sort?: { col: string; dir: 'asc' | 'desc' } | null
-  ) => Promise<DfRow[]>
+  pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
@@ -41,7 +43,7 @@ export function useEngine(): UseEngine {
   const wsRef = useRef<WebSocket | null>(null)
   const idCounter = useRef(0)
   const pending = useRef<number[]>([]) // fila FIFO de ids aguardando reply
-  const pageReqs = useRef<Map<number, (rows: DfRow[]) => void>>(new Map())
+  const pageReqs = useRef<Map<number, (page: DfPage) => void>>(new Map())
   const reqCounter = useRef(0)
 
   const [conn, setConn] = useState<ConnState>('connecting')
@@ -100,7 +102,10 @@ export function useEngine(): UseEngine {
         const resolve = pageReqs.current.get(msg.reqId)
         if (resolve) {
           pageReqs.current.delete(msg.reqId)
-          resolve(msg.error ? [] : (msg.rows ?? []))
+          resolve({
+            rows: msg.error ? [] : (msg.rows ?? []),
+            total: msg.total ?? 0
+          })
         }
         return
       }
@@ -204,21 +209,26 @@ export function useEngine(): UseEngine {
   }, [])
 
   const pageDataFrame = useCallback(
-    (
-      handle: string,
-      start: number,
-      end: number,
-      sort?: { col: string; dir: 'asc' | 'desc' } | null
-    ): Promise<DfRow[]> => {
+    (handle: string, start: number, end: number, view?: DfView): Promise<DfPage> => {
       const ws = wsRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve([])
+      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve({ rows: [], total: 0 })
       const reqId = ++reqCounter.current
-      return new Promise<DfRow[]>((resolve) => {
+      return new Promise<DfPage>((resolve) => {
         pageReqs.current.set(reqId, resolve)
-        ws.send(JSON.stringify({ type: 'df_page', reqId, handle, start, end, sort: sort ?? null }))
+        ws.send(
+          JSON.stringify({
+            type: 'df_page',
+            reqId,
+            handle,
+            start,
+            end,
+            sort: view?.sort ?? null,
+            filters: view?.filters ?? {}
+          })
+        )
         // failsafe: não deixa a promise pendurada se a resposta nunca vier
         setTimeout(() => {
-          if (pageReqs.current.delete(reqId)) resolve([])
+          if (pageReqs.current.delete(reqId)) resolve({ rows: [], total: 0 })
         }, 10000)
       })
     },

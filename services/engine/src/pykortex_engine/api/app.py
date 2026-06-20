@@ -76,6 +76,7 @@ async def execute_ws(websocket: WebSocket) -> None:
                     msg.get("end", 0),
                     sort.get("col"),
                     sort.get("dir"),
+                    msg.get("filters") or {},
                 )
                 await websocket.send_json(
                     {
@@ -83,6 +84,7 @@ async def execute_ws(websocket: WebSocket) -> None:
                         "reqId": msg.get("reqId"),
                         "rows": result.get("rows", []),
                         "start": result.get("start", msg.get("start", 0)),
+                        "total": result.get("total"),
                         "error": result.get("error"),
                     }
                 )

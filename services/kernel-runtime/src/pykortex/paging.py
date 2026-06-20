@@ -34,24 +34,45 @@ def register(df: Any) -> str:
     return handle
 
 
-def _order_for(handle: str, df: Any, sort_col: str | None, sort_dir: str | None) -> Any:
-    """Retorna o array de posições na ordem desejada (ou None = ordem natural).
+def _view_order(
+    handle: str,
+    df: Any,
+    filters: dict[str, str] | None,
+    sort_col: str | None,
+    sort_dir: str | None,
+) -> Any:
+    """Posições do df na ordem da "view" (filtros + sort); None = natural completo.
 
-    Memoiza por handle, recomputando só quando o critério de sort muda.
+    Memoiza por handle, recomputando só quando filtros ou sort mudam.
     """
-    if sort_col is None:
-        return None
-    key = (sort_col, sort_dir)
+    active = {k: v for k, v in (filters or {}).items() if v}
+    key = (tuple(sorted(active.items())), sort_col, sort_dir)
     cached = _ORDERS.get(handle)
     if cached and cached[0] == key:
         return cached[1]
+
+    if not active and sort_col is None:
+        _ORDERS[handle] = (key, None)
+        return None
+
     try:
-        ascending = sort_dir != "desc"
-        order = (
-            df.reset_index(drop=True)
-            .sort_values(by=sort_col, ascending=ascending, kind="stable")
-            .index.to_numpy()
-        )
+        import pandas as pd
+
+        base = df.reset_index(drop=True)  # índice posicional 0..n-1
+        work = base
+        if active:
+            mask = pd.Series(True, index=base.index)
+            for col, text in active.items():
+                if col in base.columns:
+                    mask &= base[col].astype(str).str.contains(
+                        str(text), case=False, na=False, regex=False
+                    )
+            work = base[mask]
+        if sort_col is not None and sort_col in work.columns:
+            work = work.sort_values(
+                by=sort_col, ascending=sort_dir != "desc", kind="stable"
+            )
+        order = work.index.to_numpy()
         _ORDERS[handle] = (key, order)
         return order
     except Exception:  # noqa: BLE001 - coluna inexistente / não ordenável
@@ -64,21 +85,23 @@ def page_json(
     end: int,
     sort_col: str | None = None,
     sort_dir: str | None = None,
+    filters: dict[str, str] | None = None,
 ) -> str:
-    """Retorna JSON com as linhas [start:end) do DataFrame (com sort opcional)."""
+    """Retorna JSON {rows, start, total} aplicando filtros + sort (view)."""
     df = _CACHE.get(handle)
     if df is None:
-        return json.dumps({"error": "expired"})
+        return json.dumps({"error": "expired", "total": 0, "rows": []})
     try:
         _CACHE.move_to_end(handle)
         start = max(0, int(start))
         end = max(start, int(end))
-        order = _order_for(handle, df, sort_col, sort_dir)
+        order = _view_order(handle, df, filters, sort_col, sort_dir)
+        total = int(len(df)) if order is None else int(len(order))
         sub = df.iloc[order[start:end]] if order is not None else df.iloc[start:end]
         rows = [
             {"index": _jsonable(idx), "values": [_jsonable(v) for v in values]}
             for idx, values in zip(sub.index, sub.itertuples(index=False, name=None))
         ]
-        return json.dumps({"rows": rows, "start": start})
+        return json.dumps({"rows": rows, "start": start, "total": total})
     except Exception as exc:  # noqa: BLE001
-        return json.dumps({"error": str(exc)})
+        return json.dumps({"error": str(exc), "total": 0, "rows": []})
