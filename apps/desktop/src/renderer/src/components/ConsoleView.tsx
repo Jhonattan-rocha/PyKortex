@@ -77,6 +77,58 @@ function ExecutionBlock({
   )
 }
 
+interface RenderCtx {
+  fetchPage: FetchPage
+  onRequest: OnRequest
+}
+type RichRenderer = (data: Record<string, unknown>, ctx: RenderCtx) => JSX.Element | null
+
+/**
+ * Renderers de saída rica em ordem de prioridade (espelha o registro de
+ * `@pk.viewer(Tipo)` do lado Python). Adicionar um viewer novo = uma entrada
+ * aqui; o primeiro que reconhecer o MIME vence. Cai para `text/plain` se nenhum.
+ */
+const RICH_RENDERERS: RichRenderer[] = [
+  (data, ctx) => {
+    const df = data[DATAFRAME_MIME] as DataFramePayload | undefined
+    return df?.kind === 'dataframe' ? <DataFrameView df={df} fetchPage={ctx.fetchPage} /> : null
+  },
+  (data, ctx) => {
+    const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
+    return fa?.kind === 'fastapi' ? <FastApiView app={fa} onRequest={ctx.onRequest} /> : null
+  },
+  // imagens (matplotlib etc.): png/jpeg vêm em base64
+  (data) => {
+    const png = data['image/png']
+    const jpeg = data['image/jpeg']
+    if (typeof png !== 'string' && typeof jpeg !== 'string') return null
+    const mime = typeof png === 'string' ? 'image/png' : 'image/jpeg'
+    const b64 = typeof png === 'string' ? png : (jpeg as string)
+    return <img className="out out--img" src={`data:${mime};base64,${b64}`} alt="figura" />
+  },
+  (data) => {
+    const svg = data['image/svg+xml']
+    return typeof svg === 'string' ? (
+      <div className="out out--img" dangerouslySetInnerHTML={{ __html: svg }} />
+    ) : null
+  },
+  (data) => {
+    // kernel local de confiança nesta fase; sanitização entra depois
+    const html = data['text/html']
+    return typeof html === 'string' ? (
+      <div className="out out--html" dangerouslySetInnerHTML={{ __html: html }} />
+    ) : null
+  }
+]
+
+function renderRich(data: Record<string, unknown>, ctx: RenderCtx): JSX.Element {
+  for (const render of RICH_RENDERERS) {
+    const el = render(data, ctx)
+    if (el) return el
+  }
+  return <pre className="out out--result">{String(data['text/plain'] ?? '')}</pre>
+}
+
 function OutputItem({
   msg,
   fetchPage,
@@ -90,36 +142,8 @@ function OutputItem({
     case 'stream':
       return <pre className={`out out--stream out--${msg.name}`}>{msg.text}</pre>
     case 'execute_result':
-    case 'display_data': {
-      const data = msg.data as Record<string, unknown>
-      // MIME rico do PyKortex tem prioridade sobre html/texto.
-      const df = data[DATAFRAME_MIME] as DataFramePayload | undefined
-      if (df && df.kind === 'dataframe') {
-        return <DataFrameView df={df} fetchPage={fetchPage} />
-      }
-      const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
-      if (fa && fa.kind === 'fastapi') {
-        return <FastApiView app={fa} onRequest={onRequest} />
-      }
-      // imagens (matplotlib etc.): png/jpeg vêm em base64; svg vem como texto
-      const png = data['image/png']
-      const jpeg = data['image/jpeg']
-      if (typeof png === 'string' || typeof jpeg === 'string') {
-        const mime = typeof png === 'string' ? 'image/png' : 'image/jpeg'
-        const b64 = (typeof png === 'string' ? png : jpeg) as string
-        return <img className="out out--img" src={`data:${mime};base64,${b64}`} alt="figura" />
-      }
-      const svg = data['image/svg+xml']
-      if (typeof svg === 'string') {
-        return <div className="out out--img" dangerouslySetInnerHTML={{ __html: svg }} />
-      }
-      const html = data['text/html']
-      if (typeof html === 'string') {
-        // kernel local de confiança nesta fase; sanitização entra depois
-        return <div className="out out--html" dangerouslySetInnerHTML={{ __html: html }} />
-      }
-      return <pre className="out out--result">{String(data['text/plain'] ?? '')}</pre>
-    }
+    case 'display_data':
+      return renderRich(msg.data as Record<string, unknown>, { fetchPage, onRequest })
     case 'error':
       return (
         <pre className="out out--error">

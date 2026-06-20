@@ -46,9 +46,9 @@ const MAX_BACKOFF_MS = 5000
 export function useEngine(): UseEngine {
   const wsRef = useRef<WebSocket | null>(null)
   const idCounter = useRef(0)
-  const pending = useRef<number[]>([]) // fila FIFO de ids aguardando reply
-  const pageReqs = useRef<Map<number, (page: DfPage) => void>>(new Map())
-  const apiReqs = useRef<Map<number, (res: ApiResponse) => void>>(new Map())
+  const pending = useRef<number[]>([]) // fila FIFO de ids de execução aguardando reply
+  // resolvers de request/response (df_page, api_request...) por reqId, qualquer tipo
+  const requests = useRef<Map<number, (value: unknown) => void>>(new Map())
   const reqCounter = useRef(0)
 
   const [conn, setConn] = useState<ConnState>('connecting')
@@ -88,6 +88,14 @@ export function useEngine(): UseEngine {
       )
     }
 
+    function resolveRequest(reqId: number, value: unknown): void {
+      const resolve = requests.current.get(reqId)
+      if (resolve) {
+        requests.current.delete(reqId)
+        resolve(value)
+      }
+    }
+
     function handleMessage(msg: ServerMessage): void {
       if (msg.type === 'status') {
         setKernel(msg.state)
@@ -104,22 +112,14 @@ export function useEngine(): UseEngine {
         return
       }
       if (msg.type === 'df_rows') {
-        const resolve = pageReqs.current.get(msg.reqId)
-        if (resolve) {
-          pageReqs.current.delete(msg.reqId)
-          resolve({
-            rows: msg.error ? [] : (msg.rows ?? []),
-            total: msg.total ?? 0
-          })
-        }
+        resolveRequest(msg.reqId, {
+          rows: msg.error ? [] : (msg.rows ?? []),
+          total: msg.total ?? 0
+        })
         return
       }
       if (msg.type === 'api_response') {
-        const resolve = apiReqs.current.get(msg.reqId)
-        if (resolve) {
-          apiReqs.current.delete(msg.reqId)
-          resolve(msg.response ?? {})
-        }
+        resolveRequest(msg.reqId, msg.response ?? {})
         return
       }
       if (msg.type === 'kernel_error') {
@@ -225,47 +225,58 @@ export function useEngine(): UseEngine {
     wsRef.current?.send(JSON.stringify({ type: 'clear_vars' }))
   }, [])
 
-  const pageDataFrame = useCallback(
-    (handle: string, start: number, end: number, view?: DfView): Promise<DfPage> => {
+  /**
+   * Envia uma mensagem de request/response correlacionada por reqId e resolve
+   * com a resposta (ou com `unavailable`/`onTimeout` se a conexão cair ou
+   * estourar o prazo). O mapeamento da resposta acontece no handleMessage.
+   */
+  const sendRequest = useCallback(
+    <T>(
+      message: Record<string, unknown>,
+      opts: { unavailable: T; onTimeout: T; timeoutMs: number }
+    ): Promise<T> => {
       const ws = wsRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve({ rows: [], total: 0 })
+      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve(opts.unavailable)
       const reqId = ++reqCounter.current
-      return new Promise<DfPage>((resolve) => {
-        pageReqs.current.set(reqId, resolve)
-        ws.send(
-          JSON.stringify({
-            type: 'df_page',
-            reqId,
-            handle,
-            start,
-            end,
-            sort: view?.sort ?? null,
-            filters: view?.filters ?? {}
-          })
-        )
-        // failsafe: não deixa a promise pendurada se a resposta nunca vier
+      return new Promise<T>((resolve) => {
+        requests.current.set(reqId, resolve as (value: unknown) => void)
+        ws.send(JSON.stringify({ ...message, reqId }))
         setTimeout(() => {
-          if (pageReqs.current.delete(reqId)) resolve({ rows: [], total: 0 })
-        }, 10000)
+          if (requests.current.delete(reqId)) resolve(opts.onTimeout)
+        }, opts.timeoutMs)
       })
     },
     []
   )
 
-  const requestApp = useCallback((opts: ApiRequestOpts): Promise<ApiResponse> => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return Promise.resolve({ error: 'sem conexão com o engine' })
-    }
-    const reqId = ++reqCounter.current
-    return new Promise<ApiResponse>((resolve) => {
-      apiReqs.current.set(reqId, resolve)
-      ws.send(JSON.stringify({ type: 'api_request', reqId, ...opts }))
-      setTimeout(() => {
-        if (apiReqs.current.delete(reqId)) resolve({ error: 'timeout' })
-      }, 30000)
-    })
-  }, [])
+  const pageDataFrame = useCallback(
+    (handle: string, start: number, end: number, view?: DfView): Promise<DfPage> =>
+      sendRequest<DfPage>(
+        {
+          type: 'df_page',
+          handle,
+          start,
+          end,
+          sort: view?.sort ?? null,
+          filters: view?.filters ?? {}
+        },
+        { unavailable: { rows: [], total: 0 }, onTimeout: { rows: [], total: 0 }, timeoutMs: 10000 }
+      ),
+    [sendRequest]
+  )
+
+  const requestApp = useCallback(
+    (opts: ApiRequestOpts): Promise<ApiResponse> =>
+      sendRequest<ApiResponse>(
+        { type: 'api_request', ...opts },
+        {
+          unavailable: { error: 'sem conexão com o engine' },
+          onTimeout: { error: 'timeout' },
+          timeoutMs: 30000
+        }
+      ),
+    [sendRequest]
+  )
 
   return {
     conn,

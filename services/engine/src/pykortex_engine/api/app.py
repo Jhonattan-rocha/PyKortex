@@ -9,17 +9,27 @@ Expõe:
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Callable
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from pykortex_engine import __version__
 from pykortex_engine.api.files_router import router as files_router
-from pykortex_engine.kernels import get_session
+from pykortex_engine.kernels import KernelSession, get_session
 
 logger = logging.getLogger("pykortex.engine")
 
-app = FastAPI(title="PyKortex Engine", version=__version__)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    await get_session().shutdown()
+
+
+app = FastAPI(title="PyKortex Engine", version=__version__, lifespan=lifespan)
 
 # Em dev o renderer roda em http://localhost:5173 (Vite). Em produção o Electron
 # carrega via file:// (origin "null"). Liberamos tudo localmente — o backend só
@@ -31,13 +41,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.include_router(files_router)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
+
+
+# --- Handlers do WebSocket -------------------------------------------------
+# Cada handler é um async generator que dá `yield` nas mensagens a enviar ao
+# cliente. Isso unifica os três formatos num só: streaming (execute), resposta
+# única (inspect, df_page...) e nenhuma resposta (interrupt). Adicionar um
+# comando novo = uma função + uma entrada em HANDLERS.
+
+Handler = Callable[[KernelSession, dict], AsyncIterator[dict]]
+
+
+async def _h_execute(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    async for out in session.execute(msg.get("code", "")):
+        yield out
+
+
+async def _h_interrupt(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    await session.interrupt()
+    return
+    yield  # torna isto um async generator (linha nunca alcançada)
+
+
+async def _h_inspect(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    yield {"type": "variables", "variables": await session.inspect()}
+
+
+async def _h_clear_vars(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    cleared = await session.clear_vars()
+    yield {"type": "variables", "variables": await session.inspect(), "cleared": cleared}
+
+
+async def _h_restart(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    await session.restart()
+    yield {"type": "restarted"}
+    yield {"type": "status", "state": "idle"}
+
+
+async def _h_api_request(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    response = await session.request_app(
+        msg.get("handle", ""),
+        msg.get("method", "GET"),
+        msg.get("path", "/"),
+        msg.get("query") or {},
+        msg.get("headers") or {},
+        msg.get("body"),
+        msg.get("hasBody", False),
+    )
+    yield {"type": "api_response", "reqId": msg.get("reqId"), "response": response}
+
+
+async def _h_df_page(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    sort = msg.get("sort") or {}
+    result = await session.page(
+        msg.get("handle", ""),
+        msg.get("start", 0),
+        msg.get("end", 0),
+        sort.get("col"),
+        sort.get("dir"),
+        msg.get("filters") or {},
+    )
+    yield {
+        "type": "df_rows",
+        "reqId": msg.get("reqId"),
+        "rows": result.get("rows", []),
+        "start": result.get("start", msg.get("start", 0)),
+        "total": result.get("total"),
+        "error": result.get("error"),
+    }
+
+
+HANDLERS: dict[str, Handler] = {
+    "execute_request": _h_execute,
+    "interrupt": _h_interrupt,
+    "inspect": _h_inspect,
+    "clear_vars": _h_clear_vars,
+    "restart": _h_restart,
+    "api_request": _h_api_request,
+    "df_page": _h_df_page,
+}
 
 
 @app.websocket("/ws/execute")
@@ -57,71 +145,16 @@ async def execute_ws(websocket: WebSocket) -> None:
     try:
         while True:
             msg = await websocket.receive_json()
-            msg_type = msg.get("type")
-
-            if msg_type == "execute_request":
-                code = msg.get("code", "")
-                async for out in session.execute(code):
-                    await websocket.send_json(out)
-            elif msg_type == "interrupt":
-                await session.interrupt()
-            elif msg_type == "inspect":
-                variables = await session.inspect()
-                await websocket.send_json({"type": "variables", "variables": variables})
-            elif msg_type == "clear_vars":
-                cleared = await session.clear_vars()
-                variables = await session.inspect()
+            handler = HANDLERS.get(msg.get("type"))
+            if handler is None:
                 await websocket.send_json(
-                    {"type": "variables", "variables": variables, "cleared": cleared}
+                    {"type": "kernel_error", "message": f"tipo desconhecido: {msg.get('type')}"}
                 )
-            elif msg_type == "api_request":
-                response = await session.request_app(
-                    msg.get("handle", ""),
-                    msg.get("method", "GET"),
-                    msg.get("path", "/"),
-                    msg.get("query") or {},
-                    msg.get("headers") or {},
-                    msg.get("body"),
-                    msg.get("hasBody", False),
-                )
-                await websocket.send_json(
-                    {"type": "api_response", "reqId": msg.get("reqId"), "response": response}
-                )
-            elif msg_type == "df_page":
-                sort = msg.get("sort") or {}
-                result = await session.page(
-                    msg.get("handle", ""),
-                    msg.get("start", 0),
-                    msg.get("end", 0),
-                    sort.get("col"),
-                    sort.get("dir"),
-                    msg.get("filters") or {},
-                )
-                await websocket.send_json(
-                    {
-                        "type": "df_rows",
-                        "reqId": msg.get("reqId"),
-                        "rows": result.get("rows", []),
-                        "start": result.get("start", msg.get("start", 0)),
-                        "total": result.get("total"),
-                        "error": result.get("error"),
-                    }
-                )
-            elif msg_type == "restart":
-                await session.restart()
-                await websocket.send_json({"type": "restarted"})
-                await websocket.send_json({"type": "status", "state": "idle"})
-            else:
-                await websocket.send_json(
-                    {"type": "kernel_error", "message": f"tipo desconhecido: {msg_type}"}
-                )
+                continue
+            async for out in handler(session, msg):
+                await websocket.send_json(out)
     except WebSocketDisconnect:
         logger.info("Cliente desconectou do /ws/execute")
     except Exception:  # noqa: BLE001
         logger.exception("Erro no loop do WebSocket")
         await websocket.close()
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await get_session().shutdown()

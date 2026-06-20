@@ -49,16 +49,13 @@ export function DataFrameView({
   const firstReset = useRef(true)
   useEffect(() => {
     loading.current = new Set()
+    // "natural" = sem sort/filtro: já temos a 1ª janela no payload (bloco 0).
+    // Caso contrário, esvazia e deixa a 1ª busca trazer (e corrigir o total).
     const natural = sort === null && Object.keys(filters).length === 0
-    if (natural) {
-      const m = new Map<number, DfRow>()
-      df.rows.forEach((r, i) => m.set(i, r))
-      setCache(m)
-      loaded.current = new Set([0])
-    } else {
-      setCache(new Map())
-      loaded.current = new Set()
-    }
+    setCache(
+      natural ? new Map(df.rows.map((r, i) => [i, r] as [number, DfRow])) : new Map<number, DfRow>()
+    )
+    loaded.current = natural ? new Set([0]) : new Set<number>()
     setTotal(fullRows) // placeholder; a 1ª busca corrige com o total filtrado
     if (!firstReset.current && scrollRef.current) scrollRef.current.scrollTop = 0
     setScrollTop(0)
