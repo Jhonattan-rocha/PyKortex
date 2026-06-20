@@ -1,10 +1,23 @@
 import { useEffect, useRef } from 'react'
 import type { Execution } from '../engine/useEngine'
-import { DATAFRAME_MIME, type DataFramePayload, type OutputMessage } from '../engine/protocol'
+import {
+  DATAFRAME_MIME,
+  type DataFramePayload,
+  type DfRow,
+  type OutputMessage
+} from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
 
+type FetchPage = (handle: string, start: number, end: number) => Promise<DfRow[]>
+
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
-export function ConsoleView({ executions }: { executions: Execution[] }): JSX.Element {
+export function ConsoleView({
+  executions,
+  fetchPage
+}: {
+  executions: Execution[]
+  fetchPage: FetchPage
+}): JSX.Element {
   const endRef = useRef<HTMLDivElement | null>(null)
 
   // auto-scroll para o fim quando muda o número de execuções ou suas saídas
@@ -20,14 +33,14 @@ export function ConsoleView({ executions }: { executions: Execution[] }): JSX.El
   return (
     <div className="console">
       {executions.map((ex) => (
-        <ExecutionBlock key={ex.id} ex={ex} />
+        <ExecutionBlock key={ex.id} ex={ex} fetchPage={fetchPage} />
       ))}
       <div ref={endRef} />
     </div>
   )
 }
 
-function ExecutionBlock({ ex }: { ex: Execution }): JSX.Element {
+function ExecutionBlock({ ex, fetchPage }: { ex: Execution; fetchPage: FetchPage }): JSX.Element {
   const label = ex.executionCount != null ? `In [${ex.executionCount}]` : 'In [*]'
   return (
     <div className={`exec exec--${ex.status}`}>
@@ -40,14 +53,14 @@ function ExecutionBlock({ ex }: { ex: Execution }): JSX.Element {
       <pre className="exec__code">{ex.code.trim()}</pre>
       <div className="exec__out">
         {ex.outputs.map((o, i) => (
-          <OutputItem key={i} msg={o} />
+          <OutputItem key={i} msg={o} fetchPage={fetchPage} />
         ))}
       </div>
     </div>
   )
 }
 
-function OutputItem({ msg }: { msg: OutputMessage }): JSX.Element | null {
+function OutputItem({ msg, fetchPage }: { msg: OutputMessage; fetchPage: FetchPage }): JSX.Element | null {
   switch (msg.type) {
     case 'stream':
       return <pre className={`out out--stream out--${msg.name}`}>{msg.text}</pre>
@@ -57,7 +70,7 @@ function OutputItem({ msg }: { msg: OutputMessage }): JSX.Element | null {
       // MIME rico do PyKortex tem prioridade sobre html/texto.
       const df = data[DATAFRAME_MIME] as DataFramePayload | undefined
       if (df && df.kind === 'dataframe') {
-        return <DataFrameView df={df} />
+        return <DataFrameView df={df} fetchPage={fetchPage} />
       }
       // imagens (matplotlib etc.): png/jpeg vêm em base64; svg vem como texto
       const png = data['image/png']

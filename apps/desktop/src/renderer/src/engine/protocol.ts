@@ -8,7 +8,19 @@ export type ExecuteRequest = { type: 'execute_request'; code: string }
 export type InterruptRequest = { type: 'interrupt' }
 export type RestartRequest = { type: 'restart' }
 export type InspectRequest = { type: 'inspect' }
-export type ClientMessage = ExecuteRequest | InterruptRequest | RestartRequest | InspectRequest
+export type DfPageRequest = {
+  type: 'df_page'
+  reqId: number
+  handle: string
+  start: number
+  end: number
+}
+export type ClientMessage =
+  | ExecuteRequest
+  | InterruptRequest
+  | RestartRequest
+  | InspectRequest
+  | DfPageRequest
 
 // Servidor -> Cliente
 export type KernelState = 'busy' | 'idle' | 'starting'
@@ -41,6 +53,13 @@ export interface VariableInfo {
   summary: string
 }
 export type VariablesMsg = { type: 'variables'; variables: VariableInfo[] }
+export type DfRowsMsg = {
+  type: 'df_rows'
+  reqId: number
+  rows: DfRow[]
+  start: number
+  error?: string | null
+}
 
 export type ServerMessage =
   | StatusMsg
@@ -52,6 +71,7 @@ export type ServerMessage =
   | KernelErrorMsg
   | RestartedMsg
   | VariablesMsg
+  | DfRowsMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg
@@ -59,12 +79,17 @@ export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | Erro
 // --- MIMEs customizados do PyKortex (espelham pykortex/mime.py) ---
 export const DATAFRAME_MIME = 'application/vnd.pykortex.dataframe+json'
 
+export interface DfRow {
+  index: unknown
+  values: unknown[]
+}
 export interface DataFramePayload {
   kind: 'dataframe'
+  handle: string // id para paginação sob demanda
   shape: [number, number] // [linhas, colunas]
   columns: { name: string; dtype: string }[]
   index_name: string | null
-  rows: { index: unknown; values: unknown[] }[]
+  rows: DfRow[]
   truncated: boolean
   shown: number
 }

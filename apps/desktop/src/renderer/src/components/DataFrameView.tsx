@@ -1,24 +1,81 @@
-import type { DataFramePayload } from '../engine/protocol'
+import { useEffect, useRef, useState } from 'react'
+import type { DataFramePayload, DfRow } from '../engine/protocol'
 
-/** Renderiza o payload de DataFrame numa grade rica (cabeçalho + tipos + índice). */
-export function DataFrameView({ df }: { df: DataFramePayload }): JSX.Element {
-  const [nrows, ncols] = df.shape
+const ROW_H = 24 // altura fixa de linha (px) — base da virtualização
+const BLOCK = 100 // tamanho do bloco buscado por vez
+const VIEWPORT_H = 360 // altura da área de scroll
+const OVERSCAN = 10 // linhas extras renderizadas (absorve o header sticky)
+const IDX_W = 64
+const COL_W = 140
+
+/**
+ * Grade de DataFrame virtualizada: só renderiza a janela visível e busca os
+ * blocos de linhas sob demanda (via fetchPage, por handle). Suporta milhões de
+ * linhas sem travar.
+ */
+export function DataFrameView({
+  df,
+  fetchPage
+}: {
+  df: DataFramePayload
+  fetchPage: (handle: string, start: number, end: number) => Promise<DfRow[]>
+}): JSX.Element {
+  const [total, ncols] = df.shape
+  const [cache, setCache] = useState<Map<number, DfRow>>(() => {
+    const m = new Map<number, DfRow>()
+    df.rows.forEach((r, i) => m.set(i, r)) // semeia com a janela inicial
+    return m
+  })
+  const loaded = useRef<Set<number>>(new Set([0])) // bloco 0 veio no payload
+  const loading = useRef<Set<number>>(new Set())
+  const [scrollTop, setScrollTop] = useState(0)
+
+  const first = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
+  const last = Math.min(total, Math.ceil((scrollTop + VIEWPORT_H) / ROW_H) + OVERSCAN)
+
+  useEffect(() => {
+    for (let b = Math.floor(first / BLOCK) * BLOCK; b < last; b += BLOCK) {
+      if (loaded.current.has(b) || loading.current.has(b)) continue
+      loading.current.add(b)
+      void fetchPage(df.handle, b, Math.min(b + BLOCK, total)).then((rows) => {
+        loading.current.delete(b)
+        loaded.current.add(b)
+        setCache((prev) => {
+          const next = new Map(prev)
+          rows.forEach((r, i) => next.set(b + i, r))
+          return next
+        })
+      })
+    }
+  }, [first, last, df.handle, total, fetchPage])
+
+  const visible: number[] = []
+  for (let i = first; i < last; i++) visible.push(i)
+
   return (
     <div className="df">
       <div className="df__meta">
-        <strong>{nrows.toLocaleString('pt-BR')}</strong> linhas ×{' '}
+        <strong>{total.toLocaleString('pt-BR')}</strong> linhas ×{' '}
         <strong>{ncols.toLocaleString('pt-BR')}</strong> colunas
-        {df.truncated && (
-          <span className="df__trunc"> · mostrando as primeiras {df.shown}</span>
-        )}
+        {total > df.shown && <span className="df__trunc"> · role para carregar</span>}
       </div>
-      <div className="df__scroll">
-        <table className="df__table">
+      <div
+        className="df__scroll"
+        style={{ height: VIEWPORT_H }}
+        onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
+      >
+        <table className="df__table" style={{ width: IDX_W + ncols * COL_W, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: IDX_W }} />
+            {df.columns.map((_, i) => (
+              <col key={i} style={{ width: COL_W }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th className="df__idx">{df.index_name ?? ''}</th>
               {df.columns.map((c, i) => (
-                <th key={i} title={c.dtype}>
+                <th key={i} title={`${c.name} · ${c.dtype}`}>
                   <div className="df__col">{c.name}</div>
                   <div className="df__dtype">{c.dtype}</div>
                 </th>
@@ -26,16 +83,31 @@ export function DataFrameView({ df }: { df: DataFramePayload }): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {df.rows.map((row, ri) => (
-              <tr key={ri}>
-                <td className="df__idx">{fmt(row.index)}</td>
-                {row.values.map((v, ci) => (
-                  <td key={ci} className={cellClass(v)}>
-                    {fmt(v)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            <tr aria-hidden style={{ height: first * ROW_H }}>
+              <td colSpan={ncols + 1} className="df__spacer" />
+            </tr>
+            {visible.map((i) => {
+              const row = cache.get(i)
+              return (
+                <tr key={i}>
+                  <td className="df__idx">{row ? fmt(row.index) : i}</td>
+                  {row
+                    ? row.values.map((v, ci) => (
+                        <td key={ci} className={cellClass(v)} title={fmt(v)}>
+                          {fmt(v)}
+                        </td>
+                      ))
+                    : df.columns.map((_, ci) => (
+                        <td key={ci} className="df__cell df__loading">
+                          ⋯
+                        </td>
+                      ))}
+                </tr>
+              )
+            })}
+            <tr aria-hidden style={{ height: (total - last) * ROW_H }}>
+              <td colSpan={ncols + 1} className="df__spacer" />
+            </tr>
           </tbody>
         </table>
       </div>
@@ -45,7 +117,6 @@ export function DataFrameView({ df }: { df: DataFramePayload }): JSX.Element {
 
 function fmt(v: unknown): string {
   if (v === null || v === undefined) return 'NaN'
-  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v)
   return String(v)
 }
 

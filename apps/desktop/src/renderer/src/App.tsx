@@ -50,8 +50,19 @@ const parentDir = (abs: string): string => {
 }
 
 export function App(): JSX.Element {
-  const { conn, kernel, executions, variables, errorText, execute, interrupt, restart, clear, inspect } =
-    useEngine()
+  const {
+    conn,
+    kernel,
+    executions,
+    variables,
+    errorText,
+    execute,
+    interrupt,
+    restart,
+    clear,
+    inspect,
+    pageDataFrame
+  } = useEngine()
 
   const [tabs, setTabs] = useState<Tab[]>([newScratch()])
   const [activeId, setActiveId] = useState<string>(SCRATCH_ID)
@@ -352,7 +363,7 @@ export function App(): JSX.Element {
             <span>Console</span>
           </div>
           {errorText && <div className="banner banner--error">{errorText}</div>}
-          <ConsoleView executions={executions} />
+          <ConsoleView executions={executions} fetchPage={pageDataFrame} />
         </section>
       </main>
     </div>

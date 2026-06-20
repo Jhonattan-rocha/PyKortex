@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { KernelState, OutputMessage, ServerMessage, VariableInfo } from './protocol'
+import type { DfRow, KernelState, OutputMessage, ServerMessage, VariableInfo } from './protocol'
 
 export type ConnState = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -22,6 +22,7 @@ export interface UseEngine {
   restart: () => void
   clear: () => void
   inspect: () => void
+  pageDataFrame: (handle: string, start: number, end: number) => Promise<DfRow[]>
 }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
@@ -35,6 +36,8 @@ export function useEngine(): UseEngine {
   const wsRef = useRef<WebSocket | null>(null)
   const idCounter = useRef(0)
   const pending = useRef<number[]>([]) // fila FIFO de ids aguardando reply
+  const pageReqs = useRef<Map<number, (rows: DfRow[]) => void>>(new Map())
+  const reqCounter = useRef(0)
 
   const [conn, setConn] = useState<ConnState>('connecting')
   const [kernel, setKernel] = useState<KernelState>('starting')
@@ -86,6 +89,14 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'variables') {
         setVariables(msg.variables)
+        return
+      }
+      if (msg.type === 'df_rows') {
+        const resolve = pageReqs.current.get(msg.reqId)
+        if (resolve) {
+          pageReqs.current.delete(msg.reqId)
+          resolve(msg.error ? [] : (msg.rows ?? []))
+        }
         return
       }
       if (msg.type === 'kernel_error') {
@@ -187,6 +198,23 @@ export function useEngine(): UseEngine {
     wsRef.current?.send(JSON.stringify({ type: 'inspect' }))
   }, [])
 
+  const pageDataFrame = useCallback(
+    (handle: string, start: number, end: number): Promise<DfRow[]> => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve([])
+      const reqId = ++reqCounter.current
+      return new Promise<DfRow[]>((resolve) => {
+        pageReqs.current.set(reqId, resolve)
+        ws.send(JSON.stringify({ type: 'df_page', reqId, handle, start, end }))
+        // failsafe: não deixa a promise pendurada se a resposta nunca vier
+        setTimeout(() => {
+          if (pageReqs.current.delete(reqId)) resolve([])
+        }, 10000)
+      })
+    },
+    []
+  )
+
   return {
     conn,
     kernel,
@@ -197,6 +225,7 @@ export function useEngine(): UseEngine {
     interrupt,
     restart,
     clear,
-    inspect
+    inspect,
+    pageDataFrame
   }
 }

@@ -40,7 +40,14 @@ def _jsonable(v: Any) -> Any:
 
 
 def build_dataframe_payload(df: Any, max_rows: int = 100) -> dict[str, Any]:
-    """Monta o payload do MIME de DataFrame: janela de linhas + schema + shape."""
+    """Monta o payload do MIME de DataFrame: janela de linhas + schema + shape.
+
+    Registra o df no cache de paginação e inclui o ``handle`` para o frontend
+    pedir mais linhas sob demanda.
+    """
+    # import tardio para evitar ciclo de import (paging importa deste módulo)
+    from pykortex.paging import register
+
     nrows, ncols = int(df.shape[0]), int(df.shape[1])
     head = df.head(max_rows)
 
@@ -52,6 +59,7 @@ def build_dataframe_payload(df: Any, max_rows: int = 100) -> dict[str, Any]:
 
     return {
         "kind": "dataframe",
+        "handle": register(df),
         "shape": [nrows, ncols],
         "columns": columns,
         "index_name": None if df.index.name is None else str(df.index.name),

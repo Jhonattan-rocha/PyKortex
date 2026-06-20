@@ -532,8 +532,21 @@ button:disabled {
 .df__table td {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  padding: 3px 8px;
+  padding: 2px 8px;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.df__table td {
+  height: 24px; /* fixo: base da virtualização (ROW_H) */
+}
+.df__spacer {
+  padding: 0;
+  border: 0;
+}
+.df__loading {
+  color: var(--fg-dim);
+  text-align: center;
 }
 .df__table thead th {
   position: sticky;

@@ -68,6 +68,19 @@ async def execute_ws(websocket: WebSocket) -> None:
             elif msg_type == "inspect":
                 variables = await session.inspect()
                 await websocket.send_json({"type": "variables", "variables": variables})
+            elif msg_type == "df_page":
+                result = await session.page(
+                    msg.get("handle", ""), msg.get("start", 0), msg.get("end", 0)
+                )
+                await websocket.send_json(
+                    {
+                        "type": "df_rows",
+                        "reqId": msg.get("reqId"),
+                        "rows": result.get("rows", []),
+                        "start": result.get("start", msg.get("start", 0)),
+                        "error": result.get("error"),
+                    }
+                )
             elif msg_type == "restart":
                 await session.restart()
                 await websocket.send_json({"type": "restarted"})

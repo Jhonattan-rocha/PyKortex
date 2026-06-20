@@ -43,19 +43,23 @@ def _ensure_kernelspec() -> str:
         return "python3"
 
 
-def _parse_inspect(text_plain: str) -> list[dict[str, Any]]:
-    """O resultado de user_expressions vem como repr(str) em text/plain.
+def _parse_json_str(text_plain: str) -> Any:
+    """user_expressions retorna repr(str) em text/plain; desembrulha + json.loads.
 
-    Ex.: ``"'[{...}]'"`` -> desembrulha o literal Python -> json.loads.
+    Ex.: ``"'{...}'"`` -> literal Python (string) -> objeto JSON.
     """
     if not text_plain:
-        return []
+        return None
     try:
         inner = ast.literal_eval(text_plain)  # repr de string -> string
-        data = json.loads(inner)
-        return data if isinstance(data, list) else []
+        return json.loads(inner)
     except Exception:  # noqa: BLE001
-        return []
+        return None
+
+
+def _parse_inspect(text_plain: str) -> list[dict[str, Any]]:
+    data = _parse_json_str(text_plain)
+    return data if isinstance(data, list) else []
 
 
 def _translate_iopub(msg: dict[str, Any]) -> dict[str, Any] | None:
@@ -216,6 +220,33 @@ class KernelSession:
             text = result.get("data", {}).get("text/plain", "")
             return _parse_inspect(text)
         return []
+
+    async def page(self, handle: str, start: int, end: int) -> dict[str, Any]:
+        """Recorta linhas [start:end) de um DataFrame cacheado (out-of-band)."""
+        if self._km is None:
+            return {"error": "no kernel"}
+        client = self._client
+        expr = f'__import__("pykortex")._page_json({handle!r}, {int(start)}, {int(end)})'
+        msg_id = client.execute(
+            "",
+            silent=True,
+            store_history=False,
+            allow_stdin=False,
+            user_expressions={"v": expr},
+        )
+        for _ in range(50):
+            try:
+                reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
+            except (Empty, asyncio.TimeoutError):
+                continue
+            if reply.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+            result = reply["content"].get("user_expressions", {}).get("v", {})
+            if result.get("status") != "ok":
+                return {"error": "eval failed"}
+            text = result.get("data", {}).get("text/plain", "")
+            return _parse_json_str(text)
+        return {"error": "timeout"}
 
     async def interrupt(self) -> None:
         if self._km is not None:
