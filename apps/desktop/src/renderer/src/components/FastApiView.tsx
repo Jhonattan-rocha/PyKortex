@@ -1,7 +1,14 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ApiRequestOpts, ApiResponse, FastApiPayload, FastApiRoute } from '../engine/protocol'
 
 type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
+
+interface HistoryEntry {
+  id: number
+  opts: ApiRequestOpts
+  response: ApiResponse
+  when: number
+}
 
 /** Explorador de app FastAPI: rotas + request/response do app vivo. */
 export function FastApiView({
@@ -11,6 +18,21 @@ export function FastApiView({
   app: FastApiPayload
   onRequest: OnRequest
 }): JSX.Element {
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const idRef = useRef(0)
+
+  // todo envio passa por aqui para ser registrado no histórico
+  const send = useCallback(
+    async (opts: ApiRequestOpts): Promise<ApiResponse> => {
+      const response = await onRequest(opts)
+      setHistory((h) =>
+        [{ id: ++idRef.current, opts, response, when: Date.now() }, ...h].slice(0, 20)
+      )
+      return response
+    },
+    [onRequest]
+  )
+
   return (
     <div className="fa">
       <div className="fa__head">
@@ -22,9 +44,10 @@ export function FastApiView({
       </div>
       <div className="fa__routes">
         {app.routes.map((r, i) => (
-          <RouteRow key={i} route={r} handle={app.handle} onRequest={onRequest} />
+          <RouteRow key={i} route={r} handle={app.handle} send={send} />
         ))}
       </div>
+      {history.length > 0 && <History entries={history} send={send} />}
     </div>
   )
 }
@@ -32,15 +55,16 @@ export function FastApiView({
 function RouteRow({
   route,
   handle,
-  onRequest
+  send
 }: {
   route: FastApiRoute
   handle: string
-  onRequest: OnRequest
+  send: OnRequest
 }): JSX.Element {
   const [open, setOpen] = useState(false)
   const [pathVals, setPathVals] = useState<Record<string, string>>({})
   const [queryVals, setQueryVals] = useState<Record<string, string>>({})
+  const [headerRows, setHeaderRows] = useState<{ k: string; v: string }[]>([])
   const [bodyText, setBodyText] = useState('{}')
   const [bodyErr, setBodyErr] = useState<string | null>(null)
   const [resp, setResp] = useState<ApiResponse | null>(null)
@@ -49,9 +73,12 @@ function RouteRow({
   const pathParams = route.params.filter((p) => p.in === 'path')
   const queryParams = route.params.filter((p) => p.in === 'query')
 
-  const send = async (): Promise<void> => {
+  const setHeader = (i: number, patch: Partial<{ k: string; v: string }>): void =>
+    setHeaderRows((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+
+  const doSend = async (): Promise<void> => {
     setBodyErr(null)
-    let body: unknown = undefined
+    let body: unknown
     const hasBody = Boolean(route.requestBody)
     if (hasBody) {
       try {
@@ -61,14 +88,15 @@ function RouteRow({
         return
       }
     }
-    // substitui {param} no path
     let path = route.path
     for (const p of pathParams) {
       path = path.replace(`{${p.name}}`, encodeURIComponent(pathVals[p.name] ?? ''))
     }
+    const headers: Record<string, string> = {}
+    for (const { k, v } of headerRows) if (k.trim()) headers[k.trim()] = v
+
     setLoading(true)
-    const r = await onRequest({ handle, method: route.method, path, query: queryVals, body, hasBody })
-    setResp(r)
+    setResp(await send({ handle, method: route.method, path, query: queryVals, headers, body, hasBody }))
     setLoading(false)
   }
 
@@ -118,6 +146,47 @@ function RouteRow({
             </div>
           )}
 
+          <div className="fa-block">
+            <div className="fa-block__title">Headers</div>
+            {headerRows.map((row, i) => (
+              <div key={i} className="fa-input-row">
+                <input
+                  className="fa-input fa-input--key"
+                  placeholder="chave"
+                  value={row.k}
+                  onChange={(e) => setHeader(i, { k: e.target.value })}
+                />
+                <input
+                  className="fa-input"
+                  placeholder="valor"
+                  value={row.v}
+                  onChange={(e) => setHeader(i, { v: e.target.value })}
+                />
+                <button
+                  className="fa-x"
+                  title="remover"
+                  onClick={() => setHeaderRows((rows) => rows.filter((_, j) => j !== i))}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <div className="fa-add-row">
+              <button className="fa-add" onClick={() => setHeaderRows((r) => [...r, { k: '', v: '' }])}>
+                + header
+              </button>
+              <button
+                className="fa-add"
+                title="auth via Bearer token"
+                onClick={() =>
+                  setHeaderRows((r) => [...r, { k: 'Authorization', v: 'Bearer ' }])
+                }
+              >
+                + Authorization
+              </button>
+            </div>
+          </div>
+
           {route.requestBody && (
             <div className="fa-block">
               <div className="fa-block__title">
@@ -133,7 +202,7 @@ function RouteRow({
             </div>
           )}
 
-          <button className="fa-send" onClick={() => void send()} disabled={loading}>
+          <button className="fa-send" onClick={() => void doSend()} disabled={loading}>
             {loading ? 'enviando…' : `Enviar ${route.method}`}
           </button>
 
@@ -157,6 +226,51 @@ function RouteRow({
   )
 }
 
+function History({
+  entries,
+  send
+}: {
+  entries: HistoryEntry[]
+  send: OnRequest
+}): JSX.Element {
+  const [openId, setOpenId] = useState<number | null>(null)
+  return (
+    <div className="fa-history">
+      <div className="fa-block__title">Histórico</div>
+      {entries.map((e) => {
+        const status = e.response.status
+        const cls = status ? `fa-code--${String(status)[0]}` : 'fa-code--err'
+        return (
+          <div key={e.id} className="fa-hist">
+            <div className="fa-hist__row" onClick={() => setOpenId((id) => (id === e.id ? null : e.id))}>
+              <span className={`fa-method fa-method--${e.opts.method.toLowerCase()}`}>
+                {e.opts.method}
+              </span>
+              <span className="fa-path">{e.opts.path}</span>
+              <span className={`fa-status ${cls}`}>{status ?? '✕'}</span>
+              {e.response.elapsed_ms != null && (
+                <span className="fa-elapsed">{e.response.elapsed_ms} ms</span>
+              )}
+              <span className="fa-when">{ago(e.when)}</span>
+              <button
+                className="fa-replay"
+                title="reenviar"
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  void send(e.opts)
+                }}
+              >
+                ↻
+              </button>
+            </div>
+            {openId === e.id && <ResponseView resp={e.response} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ResponseView({ resp }: { resp: ApiResponse }): JSX.Element {
   if (resp.error) {
     return <div className="fa-response fa-response--err">⚠ {resp.error}</div>
@@ -171,4 +285,12 @@ function ResponseView({ resp }: { resp: ApiResponse }): JSX.Element {
       <pre className="fa-response__body">{resp.body}</pre>
     </div>
   )
+}
+
+function ago(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return `há ${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `há ${m}min`
+  return `há ${Math.floor(m / 60)}h`
 }

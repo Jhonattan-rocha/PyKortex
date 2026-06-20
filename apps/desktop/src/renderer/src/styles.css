@@ -813,6 +813,76 @@ button:disabled {
   font-size: 11px;
   margin-top: 2px;
 }
+.fa-input--key {
+  flex: 0 0 35%;
+}
+.fa-x {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+}
+.fa-x:hover {
+  color: var(--error);
+}
+.fa-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.fa-add {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.fa-add:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+/* histórico de requests */
+.fa-history {
+  border-top: 1px solid var(--border);
+  padding: 6px 10px 8px;
+}
+.fa-hist {
+  border-bottom: 1px solid var(--border);
+}
+.fa-hist__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.fa-hist__row:hover {
+  background: var(--bg-3);
+}
+.fa-when {
+  font-size: 10px;
+  color: var(--fg-dim);
+}
+.fa-replay {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 13px;
+}
+.fa-replay:hover {
+  color: var(--accent);
+}
+.fa-code--err {
+  color: var(--error);
+}
+
 .fa-send {
   margin: 8px 0;
   background: var(--accent);
