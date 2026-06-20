@@ -57,11 +57,6 @@ def _parse_json_str(text_plain: str) -> Any:
         return None
 
 
-def _parse_inspect(text_plain: str) -> list[dict[str, Any]]:
-    data = _parse_json_str(text_plain)
-    return data if isinstance(data, list) else []
-
-
 def _translate_iopub(msg: dict[str, Any]) -> dict[str, Any] | None:
     """Traduz uma mensagem do canal iopub para o protocolo do PyKortex.
 
@@ -191,57 +186,15 @@ class KernelSession:
         except (Empty, asyncio.TimeoutError):
             pass
 
-    async def inspect(self) -> list[dict[str, Any]]:
-        """Lista as variáveis do namespace via user_expressions (out-of-band).
+    async def _eval_expr(self, expr: str) -> Any:
+        """Avalia uma expressão out-of-band (silent + user_expressions).
 
-        Usa uma execução silenciosa com código vazio: não cria In[n] nem saída,
-        e o resultado da expressão volta no execute_reply.
+        Não cria In[n] nem saída no console; o resultado (string JSON) volta no
+        execute_reply. Retorna o objeto JSON parseado, ou None em falha.
         """
         if self._km is None:
-            return []
+            return None
         client = self._client
-        msg_id = client.execute(
-            "",
-            silent=True,
-            store_history=False,
-            allow_stdin=False,
-            user_expressions={"v": '__import__("pykortex")._inspect_json()'},
-        )
-        for _ in range(50):
-            try:
-                reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
-            except (Empty, asyncio.TimeoutError):
-                continue
-            if reply.get("parent_header", {}).get("msg_id") != msg_id:
-                continue
-            result = reply["content"].get("user_expressions", {}).get("v", {})
-            if result.get("status") != "ok":
-                return []
-            text = result.get("data", {}).get("text/plain", "")
-            return _parse_inspect(text)
-        return []
-
-    async def page(
-        self,
-        handle: str,
-        start: int,
-        end: int,
-        sort_col: str | None = None,
-        sort_dir: str | None = None,
-        filters: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
-        """Recorta linhas [start:end) de um DataFrame cacheado (out-of-band)."""
-        if self._km is None:
-            return {"error": "no kernel"}
-        client = self._client
-        # filtros só com chaves/valores str; repr produz literal seguro p/ eval
-        safe_filters = {
-            str(k): str(v) for k, v in (filters or {}).items() if isinstance(v, str) and v
-        }
-        expr = (
-            f'__import__("pykortex")._page_json('
-            f"{handle!r}, {int(start)}, {int(end)}, {sort_col!r}, {sort_dir!r}, {safe_filters!r})"
-        )
         msg_id = client.execute(
             "",
             silent=True,
@@ -258,10 +211,40 @@ class KernelSession:
                 continue
             result = reply["content"].get("user_expressions", {}).get("v", {})
             if result.get("status") != "ok":
-                return {"error": "eval failed"}
-            text = result.get("data", {}).get("text/plain", "")
-            return _parse_json_str(text)
-        return {"error": "timeout"}
+                return None
+            return _parse_json_str(result.get("data", {}).get("text/plain", ""))
+        return None
+
+    async def inspect(self) -> list[dict[str, Any]]:
+        """Lista as variáveis do namespace (out-of-band)."""
+        data = await self._eval_expr('__import__("pykortex")._inspect_json()')
+        return data if isinstance(data, list) else []
+
+    async def page(
+        self,
+        handle: str,
+        start: int,
+        end: int,
+        sort_col: str | None = None,
+        sort_dir: str | None = None,
+        filters: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Recorta linhas [start:end) de um DataFrame cacheado (out-of-band)."""
+        # filtros só com chaves/valores str; repr produz literal seguro p/ eval
+        safe_filters = {
+            str(k): str(v) for k, v in (filters or {}).items() if isinstance(v, str) and v
+        }
+        expr = (
+            f'__import__("pykortex")._page_json('
+            f"{handle!r}, {int(start)}, {int(end)}, {sort_col!r}, {sort_dir!r}, {safe_filters!r})"
+        )
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, dict) else {"error": "eval failed", "rows": [], "total": 0}
+
+    async def clear_vars(self) -> int:
+        """Limpa as variáveis de dado do namespace sem reiniciar o kernel."""
+        data = await self._eval_expr('__import__("pykortex")._clear_namespace_json()')
+        return data.get("cleared", 0) if isinstance(data, dict) else 0
 
     async def interrupt(self) -> None:
         if self._km is not None:

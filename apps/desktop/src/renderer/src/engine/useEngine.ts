@@ -29,6 +29,7 @@ export interface UseEngine {
   restart: () => void
   clear: () => void
   inspect: () => void
+  clearVars: () => void
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 }
 
@@ -208,6 +209,10 @@ export function useEngine(): UseEngine {
     wsRef.current?.send(JSON.stringify({ type: 'inspect' }))
   }, [])
 
+  const clearVars = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: 'clear_vars' }))
+  }, [])
+
   const pageDataFrame = useCallback(
     (handle: string, start: number, end: number, view?: DfView): Promise<DfPage> => {
       const ws = wsRef.current
@@ -246,6 +251,7 @@ export function useEngine(): UseEngine {
     restart,
     clear,
     inspect,
+    clearVars,
     pageDataFrame
   }
 }

@@ -17,6 +17,7 @@ kernel chama ``pykortex._activate()`` (feito automaticamente pelo engine no boot
 """
 
 from pykortex.api import command, show, viewer
+from pykortex.introspect import clear_namespace_json as _clear_namespace_json
 from pykortex.introspect import inspect_json as _inspect_json
 from pykortex.mime import DATAFRAME_MIME
 from pykortex.paging import page_json as _page_json
@@ -30,5 +31,6 @@ __all__ = [
     "_activate",
     "_inspect_json",
     "_page_json",
+    "_clear_namespace_json",
 ]
 __version__ = "0.0.0"

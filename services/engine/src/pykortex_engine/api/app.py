@@ -68,6 +68,12 @@ async def execute_ws(websocket: WebSocket) -> None:
             elif msg_type == "inspect":
                 variables = await session.inspect()
                 await websocket.send_json({"type": "variables", "variables": variables})
+            elif msg_type == "clear_vars":
+                cleared = await session.clear_vars()
+                variables = await session.inspect()
+                await websocket.send_json(
+                    {"type": "variables", "variables": variables, "cleared": cleared}
+                )
             elif msg_type == "df_page":
                 sort = msg.get("sort") or {}
                 result = await session.page(

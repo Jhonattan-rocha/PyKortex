@@ -87,3 +87,35 @@ def inspect_json() -> str:
         return json.dumps(inspect_namespace())
     except Exception:  # noqa: BLE001
         return "[]"
+
+
+def clear_namespace() -> int:
+    """Remove as variáveis de dado do namespace (mantém imports/funções).
+
+    Também esvazia o cache de paginação (libera refs a DataFrames) e força o GC.
+    Retorna quantas variáveis foram removidas.
+    """
+    ip = _ipython()
+    if ip is None:
+        return 0
+    names = [d["name"] for d in inspect_namespace()]
+    for n in names:
+        ip.user_ns.pop(n, None)
+    try:
+        from pykortex import paging
+
+        paging._CACHE.clear()
+        paging._ORDERS.clear()
+    except Exception:  # noqa: BLE001
+        pass
+    import gc
+
+    gc.collect()
+    return len(names)
+
+
+def clear_namespace_json() -> str:
+    try:
+        return json.dumps({"cleared": clear_namespace()})
+    except Exception:  # noqa: BLE001
+        return '{"cleared": 0}'

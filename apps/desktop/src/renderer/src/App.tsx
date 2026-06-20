@@ -62,6 +62,7 @@ export function App(): JSX.Element {
     restart,
     clear,
     inspect,
+    clearVars,
     pageDataFrame
   } = useEngine()
 
@@ -364,7 +365,12 @@ export function App(): JSX.Element {
             />
           </div>
           <div className="sidebar-section sidebar-section--vars">
-            <VariableExplorer variables={variables} onRefresh={inspect} onShow={run} />
+            <VariableExplorer
+              variables={variables}
+              onRefresh={inspect}
+              onShow={run}
+              onClear={clearVars}
+            />
           </div>
         </aside>
 

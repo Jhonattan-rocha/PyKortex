@@ -14,17 +14,33 @@ const KIND_LABEL: Record<VariableInfo['kind'], string> = {
 export function VariableExplorer({
   variables,
   onRefresh,
-  onShow
+  onShow,
+  onClear
 }: {
   variables: VariableInfo[]
   onRefresh: () => void
   onShow: (name: string) => void
+  onClear: () => void
 }): JSX.Element {
   return (
     <div className="vars">
       <div className="pane__head">
         <span>Variáveis{variables.length > 0 ? ` (${variables.length})` : ''}</span>
         <div className="actions">
+          <button
+            onClick={() => {
+              if (
+                variables.length > 0 &&
+                window.confirm('Limpar todas as variáveis do kernel? (imports e funções são mantidos)')
+              ) {
+                onClear()
+              }
+            }}
+            disabled={variables.length === 0}
+            title="Limpar variáveis (libera memória; mantém o kernel)"
+          >
+            🧹
+          </button>
           <button onClick={onRefresh} title="Atualizar variáveis">
             ⟳
           </button>
