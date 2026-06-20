@@ -94,6 +94,32 @@ export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | Erro
 // --- MIMEs customizados do PyKortex (espelham pykortex/mime.py) ---
 export const DATAFRAME_MIME = 'application/vnd.pykortex.dataframe+json'
 export const FASTAPI_MIME = 'application/vnd.pykortex.fastapi+json'
+export const SQLALCHEMY_MIME = 'application/vnd.pykortex.sqlalchemy+json'
+
+export interface SaColumn {
+  name: string
+  type: string
+  pk: boolean
+  nullable: boolean
+  unique: boolean
+  fk: string | null
+}
+export interface SaTable {
+  name: string
+  columns: SaColumn[]
+}
+export interface SaRelationship {
+  from_table: string
+  from_col: string
+  to_table: string
+  to_col: string
+}
+export interface SqlAlchemyPayload {
+  kind: 'sqlalchemy'
+  count: number
+  tables: SaTable[]
+  relationships: SaRelationship[]
+}
 
 export interface FastApiRoute {
   method: string

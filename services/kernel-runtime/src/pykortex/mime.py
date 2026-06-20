@@ -5,3 +5,6 @@ DATAFRAME_MIME = "application/vnd.pykortex.dataframe+json"
 
 # Explorador de app FastAPI: rotas + request/response.
 FASTAPI_MIME = "application/vnd.pykortex.fastapi+json"
+
+# Schema do SQLAlchemy: tabelas + colunas + relações.
+SQLALCHEMY_MIME = "application/vnd.pykortex.sqlalchemy+json"

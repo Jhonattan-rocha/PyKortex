@@ -3,16 +3,19 @@ import type { Execution } from '../engine/useEngine'
 import {
   DATAFRAME_MIME,
   FASTAPI_MIME,
+  SQLALCHEMY_MIME,
   type ApiRequestOpts,
   type ApiResponse,
   type DataFramePayload,
   type DfPage,
   type DfView,
   type FastApiPayload,
-  type OutputMessage
+  type OutputMessage,
+  type SqlAlchemyPayload
 } from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
 import { FastApiView } from './FastApiView'
+import { SqlAlchemyView } from './SqlAlchemyView'
 
 type FetchPage = (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
@@ -96,6 +99,10 @@ const RICH_RENDERERS: RichRenderer[] = [
   (data, ctx) => {
     const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
     return fa?.kind === 'fastapi' ? <FastApiView app={fa} onRequest={ctx.onRequest} /> : null
+  },
+  (data) => {
+    const sa = data[SQLALCHEMY_MIME] as SqlAlchemyPayload | undefined
+    return sa?.kind === 'sqlalchemy' ? <SqlAlchemyView schema={sa} /> : null
   },
   // imagens (matplotlib etc.): png/jpeg vêm em base64
   (data) => {

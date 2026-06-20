@@ -40,7 +40,7 @@ def activate(ip: Any = None) -> bool:
 
     # Importa os viewers nativos (eles se auto-registram no REGISTRY).
     # Cada um é opcional: depende da lib correspondente estar instalada.
-    for module in ("pykortex.dataframe", "pykortex.fastapi_view"):
+    for module in ("pykortex.dataframe", "pykortex.fastapi_view", "pykortex.sqlalchemy_view"):
         try:
             __import__(module)
         except Exception:  # noqa: BLE001 - lib ausente / erro de import
