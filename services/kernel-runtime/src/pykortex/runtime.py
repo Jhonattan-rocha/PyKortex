@@ -39,10 +39,12 @@ def activate(ip: Any = None) -> bool:
         return False
 
     # Importa os viewers nativos (eles se auto-registram no REGISTRY).
-    try:
-        import pykortex.dataframe  # noqa: F401
-    except Exception:  # noqa: BLE001 - pandas pode não estar instalado
-        pass
+    # Cada um é opcional: depende da lib correspondente estar instalada.
+    for module in ("pykortex.dataframe", "pykortex.fastapi_view"):
+        try:
+            __import__(module)
+        except Exception:  # noqa: BLE001 - lib ausente / erro de import
+            pass
 
     mimebundle = ip.display_formatter.mimebundle_formatter
 

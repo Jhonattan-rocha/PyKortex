@@ -618,6 +618,153 @@ button:disabled {
   font-style: italic;
 }
 
+/* FastAPI explorer */
+.fa {
+  margin: 4px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.fa__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+}
+.fa__title {
+  font-weight: 600;
+}
+.fa__ver {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.fa__count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.fa-route {
+  border-bottom: 1px solid var(--border);
+}
+.fa-route--dep .fa-path {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.fa-route__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.fa-route__row:hover {
+  background: var(--bg-3);
+}
+.fa-method {
+  flex: none;
+  width: 54px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 0;
+  border-radius: 3px;
+  color: #fff;
+}
+.fa-method--get {
+  background: #0e9f6e;
+}
+.fa-method--post {
+  background: #2563eb;
+}
+.fa-method--put,
+.fa-method--patch {
+  background: #d97706;
+}
+.fa-method--delete {
+  background: #dc2626;
+}
+.fa-path {
+  font-family: var(--mono);
+  color: var(--fg);
+}
+.fa-summary {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+.fa-tag {
+  font-size: 10px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg-dim);
+}
+.fa-chevron {
+  margin-left: auto;
+  color: var(--fg-dim);
+}
+.fa-detail {
+  padding: 6px 10px 8px 64px;
+  background: var(--bg);
+  font-size: 12px;
+}
+.fa-block {
+  margin-bottom: 6px;
+}
+.fa-block__title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-dim);
+  margin-bottom: 2px;
+}
+.fa-param,
+.fa-resp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  padding: 1px 0;
+}
+.fa-param__name {
+  color: #9cdcfe;
+}
+.fa-param__in {
+  font-size: 10px;
+  color: var(--fg-dim);
+}
+.fa-param__type {
+  font-size: 11px;
+  color: #c586c0;
+}
+.fa-req {
+  font-size: 10px;
+  color: #d7ba7d;
+}
+.fa-schema {
+  color: #4ade80;
+  font-family: var(--mono);
+}
+.fa-code {
+  width: 32px;
+  text-align: center;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.fa-code--2 {
+  color: #4ade80;
+}
+.fa-code--4,
+.fa-code--5 {
+  color: var(--error);
+}
+.fa-resp__desc {
+  color: var(--fg-dim);
+}
+
 .banner {
   padding: 8px 12px;
   font-family: var(--mono);

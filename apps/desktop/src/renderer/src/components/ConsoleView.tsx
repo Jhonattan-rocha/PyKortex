@@ -2,12 +2,15 @@ import { useEffect, useRef } from 'react'
 import type { Execution } from '../engine/useEngine'
 import {
   DATAFRAME_MIME,
+  FASTAPI_MIME,
   type DataFramePayload,
   type DfPage,
   type DfView,
+  type FastApiPayload,
   type OutputMessage
 } from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
+import { FastApiView } from './FastApiView'
 
 type FetchPage = (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 
@@ -72,6 +75,10 @@ function OutputItem({ msg, fetchPage }: { msg: OutputMessage; fetchPage: FetchPa
       const df = data[DATAFRAME_MIME] as DataFramePayload | undefined
       if (df && df.kind === 'dataframe') {
         return <DataFrameView df={df} fetchPage={fetchPage} />
+      }
+      const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
+      if (fa && fa.kind === 'fastapi') {
+        return <FastApiView app={fa} />
       }
       // imagens (matplotlib etc.): png/jpeg vêm em base64; svg vem como texto
       const png = data['image/png']

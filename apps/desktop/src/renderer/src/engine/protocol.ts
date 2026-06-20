@@ -91,6 +91,26 @@ export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | Erro
 
 // --- MIMEs customizados do PyKortex (espelham pykortex/mime.py) ---
 export const DATAFRAME_MIME = 'application/vnd.pykortex.dataframe+json'
+export const FASTAPI_MIME = 'application/vnd.pykortex.fastapi+json'
+
+export interface FastApiRoute {
+  method: string
+  path: string
+  name: string
+  tags: string[]
+  summary: string
+  deprecated: boolean
+  params: { name: string; in: string; required: boolean; type: string }[]
+  requestBody: string | null
+  responses: Record<string, { description: string; schema: string | null }>
+}
+export interface FastApiPayload {
+  kind: 'fastapi'
+  title: string
+  version: string
+  count: number
+  routes: FastApiRoute[]
+}
 
 export interface DfRow {
   index: unknown

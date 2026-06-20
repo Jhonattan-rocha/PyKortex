@@ -2,3 +2,6 @@
 
 # Bundle de DataFrame: janela de linhas + schema + shape.
 DATAFRAME_MIME = "application/vnd.pykortex.dataframe+json"
+
+# Explorador de app FastAPI: rotas + request/response.
+FASTAPI_MIME = "application/vnd.pykortex.fastapi+json"
