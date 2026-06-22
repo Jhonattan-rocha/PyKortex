@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import { monaco } from './monacoSetup'
 import { cellAtLine, parseCells } from './cells'
+import type { CompleteResult } from '../engine/protocol'
 
 type Editor = monaco.editor.IStandaloneCodeEditor
 
@@ -12,8 +13,30 @@ export interface EditorProps {
   onRun: (code: string) => void
   /** salva o conteúdo atual (Ctrl/Cmd+S) */
   onSave: (code: string) => void
+  /** completar via kernel (jedi + namespace vivo) */
+  onComplete: (code: string, cursorPos: number) => Promise<CompleteResult>
   /** id/caminho da aba ativa: cria um model dedicado por arquivo (preserva undo/cursor) */
   path?: string
+}
+
+const K = monaco.languages.CompletionItemKind
+function completionKind(type: string): monaco.languages.CompletionItemKind {
+  switch (type) {
+    case 'function':
+      return K.Function
+    case 'class':
+      return K.Class
+    case 'module':
+      return K.Module
+    case 'instance':
+      return K.Variable
+    case 'keyword':
+      return K.Keyword
+    case 'magic':
+      return K.Event
+    default:
+      return K.Field
+  }
 }
 
 /**
@@ -25,12 +48,49 @@ export interface EditorProps {
  * Os comandos leem o modelo e o callback via refs, então nunca capturam
  * estado/props velhos (o onMount roda só uma vez).
  */
-export function CodeEditor({ value, onChange, onRun, onSave, path }: EditorProps): JSX.Element {
+export function CodeEditor({
+  value,
+  onChange,
+  onRun,
+  onSave,
+  onComplete,
+  path
+}: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
   const onRunRef = useRef(onRun)
   onRunRef.current = onRun
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
+  // provider de autocomplete (kernel: jedi + namespace vivo), registrado 1x
+  useEffect(() => {
+    const provider = monaco.languages.registerCompletionItemProvider('python', {
+      triggerCharacters: ['.'],
+      async provideCompletionItems(model, position) {
+        const res = await onCompleteRef.current(model.getValue(), model.getOffsetAt(position))
+        if (res.matches.length === 0) return { suggestions: [] }
+        const start = model.getPositionAt(res.cursor_start)
+        const end = model.getPositionAt(res.cursor_end)
+        const range = {
+          startLineNumber: start.lineNumber,
+          startColumn: start.column,
+          endLineNumber: end.lineNumber,
+          endColumn: end.column
+        }
+        return {
+          suggestions: res.matches.map((label, i) => ({
+            label,
+            kind: completionKind(res.types[i] ?? ''),
+            insertText: label,
+            range
+          }))
+        }
+      }
+    })
+    return () => provider.dispose()
+  }, [])
 
   const runCurrentCell = (advance: boolean): void => {
     const editor = editorRef.current

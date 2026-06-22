@@ -67,7 +67,8 @@ export function App(): JSX.Element {
     inspect,
     clearVars,
     pageDataFrame,
-    requestApp
+    requestApp,
+    complete
   } = useEngine()
 
   const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
@@ -441,6 +442,7 @@ export function App(): JSX.Element {
               onChange={updateActiveCode}
               onRun={run}
               onSave={save}
+              onComplete={complete}
             />
           </div>
           <div className="hint">

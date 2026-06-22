@@ -308,6 +308,31 @@ class KernelSession:
         data = await self._eval_expr('__import__("pykortex")._clear_namespace_json()')
         return data.get("cleared", 0) if isinstance(data, dict) else 0
 
+    async def complete(self, code: str, cursor_pos: int) -> dict[str, Any]:
+        """Completar via o kernel (jedi + namespace vivo), na posição do cursor."""
+        empty = {"matches": [], "cursor_start": cursor_pos, "cursor_end": cursor_pos, "types": []}
+        if self._km is None:
+            return empty
+        client = self._client
+        msg_id = client.complete(code, cursor_pos)
+        for _ in range(50):
+            try:
+                reply = await client.get_shell_msg(timeout=KERNEL_MSG_TIMEOUT)
+            except (Empty, asyncio.TimeoutError):
+                continue
+            if reply.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+            c = reply["content"]
+            meta = c.get("metadata", {}).get("_jupyter_types_experimental", [])
+            types = [m.get("type", "") for m in meta] if isinstance(meta, list) else []
+            return {
+                "matches": c.get("matches", []),
+                "cursor_start": c.get("cursor_start", cursor_pos),
+                "cursor_end": c.get("cursor_end", cursor_pos),
+                "types": types,
+            }
+        return empty
+
     async def request_app(
         self,
         handle: str,

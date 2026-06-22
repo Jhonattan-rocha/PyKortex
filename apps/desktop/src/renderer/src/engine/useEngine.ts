@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ApiRequestOpts,
   ApiResponse,
+  CompleteResult,
   DfPage,
   DfView,
   KernelState,
@@ -36,7 +37,10 @@ export interface UseEngine {
   clearVars: () => void
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
   requestApp: (opts: ApiRequestOpts) => Promise<ApiResponse>
+  complete: (code: string, cursorPos: number) => Promise<CompleteResult>
 }
+
+const EMPTY_COMPLETE: CompleteResult = { matches: [], cursor_start: 0, cursor_end: 0, types: [] }
 
 const OUTPUT_TYPES = new Set(['stream', 'execute_result', 'display_data', 'error'])
 const MAX_BACKOFF_MS = 5000
@@ -127,6 +131,15 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'api_response') {
         resolveRequest(msg.reqId, msg.response ?? {})
+        return
+      }
+      if (msg.type === 'complete_reply') {
+        resolveRequest(msg.reqId, {
+          matches: msg.matches ?? [],
+          cursor_start: msg.cursor_start,
+          cursor_end: msg.cursor_end,
+          types: msg.types ?? []
+        })
         return
       }
       if (msg.type === 'kernel_error') {
@@ -294,6 +307,15 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const complete = useCallback(
+    (code: string, cursorPos: number): Promise<CompleteResult> =>
+      sendRequest<CompleteResult>(
+        { type: 'complete', code, cursor_pos: cursorPos },
+        { unavailable: EMPTY_COMPLETE, onTimeout: EMPTY_COMPLETE, timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
   return {
     conn,
     kernel,
@@ -308,6 +330,7 @@ export function useEngine(): UseEngine {
     inspect,
     clearVars,
     pageDataFrame,
-    requestApp
+    requestApp,
+    complete
   }
 }

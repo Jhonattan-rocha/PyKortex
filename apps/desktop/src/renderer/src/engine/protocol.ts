@@ -18,6 +18,12 @@ export type DfPageRequest = {
   sort?: DfSort
   filters?: Record<string, string>
 }
+export interface CompleteResult {
+  matches: string[]
+  cursor_start: number
+  cursor_end: number
+  types: string[]
+}
 export type ClientMessage =
   | ExecuteRequest
   | InterruptRequest
@@ -72,6 +78,14 @@ export type DfRowsMsg = {
   error?: string | null
 }
 export type ApiResponseMsg = { type: 'api_response'; reqId: number; response: ApiResponse }
+export type CompleteReplyMsg = {
+  type: 'complete_reply'
+  reqId: number
+  matches: string[]
+  cursor_start: number
+  cursor_end: number
+  types: string[]
+}
 /** Resultado de uma página: linhas + total da view (filtrada). */
 export interface DfPage {
   rows: DfRow[]
@@ -95,6 +109,7 @@ export type ServerMessage =
   | KernelStatsMsg
   | DfRowsMsg
   | ApiResponseMsg
+  | CompleteReplyMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg
