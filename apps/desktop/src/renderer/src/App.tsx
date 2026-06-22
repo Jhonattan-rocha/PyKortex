@@ -5,6 +5,7 @@ import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { StatusBar } from './components/StatusBar'
 import { CodeEditor } from './editor/Editor'
+import { parseCells } from './editor/cells'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
 import { loadState, saveState } from './engine/persistence'
 
@@ -87,6 +88,18 @@ export function App(): JSX.Element {
   const run = useCallback(
     (src: string) => {
       if (connected) execute(src)
+    },
+    [connected, execute]
+  )
+
+  // "Rodar tudo": cada célula # %% vira uma execução separada (cada uma exibe
+  // sua última expressão), em vez do arquivo inteiro como um bloco só.
+  const runAll = useCallback(
+    (src: string) => {
+      if (!connected) return
+      for (const cell of parseCells(src)) {
+        if (cell.code.trim().length > 0) execute(cell.code)
+      }
     },
     [connected, execute]
   )
@@ -405,7 +418,7 @@ export function App(): JSX.Element {
           <div className="pane__subhead">
             <span className="filetab">{active?.path ?? 'scratch (não salvo em arquivo)'}</span>
             <div className="actions">
-              <button onClick={() => run(active?.code ?? '')} disabled={!connected || busy}>
+              <button onClick={() => runAll(active?.code ?? '')} disabled={!connected || busy}>
                 ▶ Rodar tudo
               </button>
               <button onClick={interrupt} disabled={!connected || !busy}>

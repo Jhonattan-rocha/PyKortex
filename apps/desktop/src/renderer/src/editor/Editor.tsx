@@ -55,10 +55,14 @@ export function CodeEditor({ value, onChange, onRun, onSave, path }: EditorProps
     }
   }
 
+  // "Rodar tudo" = roda CADA célula como execução separada (igual Run All do
+  // Jupyter), pra cada célula exibir sua própria última expressão.
   const runAll = (): void => {
     const model = editorRef.current?.getModel()
-    const src = model?.getValue() ?? ''
-    if (src.trim().length > 0) onRunRef.current(src)
+    if (!model) return
+    for (const cell of parseCells(model.getValue())) {
+      if (cell.code.trim().length > 0) onRunRef.current(cell.code)
+    }
   }
 
   const handleMount: OnMount = (editor) => {
