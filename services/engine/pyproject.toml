@@ -10,6 +10,7 @@ dependencies = [
     "jupyter-client>=8.6",
     "ipykernel>=6.29",
     "pydantic>=2.6",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]

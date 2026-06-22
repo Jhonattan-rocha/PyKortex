@@ -95,6 +95,8 @@ class KernelSession:
         self._km: AsyncKernelManager | None = None
         self._client: Any = None
         self._start_lock = asyncio.Lock()
+        self._proc: Any = None  # psutil.Process raiz do kernel (medição externa)
+        self._procs: dict[int, Any] = {}  # cache pid->Process p/ deltas de CPU
 
     @property
     def is_alive(self) -> bool:
@@ -112,7 +114,67 @@ class KernelSession:
             await client.wait_for_ready(timeout=60)
             self._km = km
             self._client = client
+            self._attach_proc()
             await self._activate_runtime()
+
+    def _attach_proc(self) -> None:
+        """Cria um psutil.Process do kernel para medir mem/CPU de fora.
+
+        Medir externamente (pelo PID) funciona mesmo com o kernel ocupado —
+        diferente de uma query out-of-band, que esperaria o kernel ficar idle.
+        """
+        self._proc = None
+        self._procs = {}
+        try:
+            import psutil
+
+            km = self._km
+            prov = getattr(km, "provisioner", None)
+            pid = getattr(prov, "pid", None) or getattr(
+                getattr(prov, "process", None), "pid", None
+            )
+            if pid is None:
+                pid = getattr(getattr(km, "kernel", None), "pid", None)
+            if pid:
+                self._proc = psutil.Process(pid)
+        except Exception:  # noqa: BLE001 - métricas são best-effort
+            self._proc = None
+
+    def _tree(self) -> list[Any]:
+        """Processos do kernel: a raiz + filhos (no Windows o kernel real é filho)."""
+        if self._proc is None:
+            return []
+        try:
+            return [self._proc, *self._proc.children(recursive=True)]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def stats(self) -> dict[str, Any]:
+        """Métricas agregadas do processo do kernel (síncrono, medição externa)."""
+        tree = self._tree()
+        if not tree:
+            return {"alive": False}
+        try:
+            current: dict[int, Any] = {}
+            for p in tree:
+                cached = self._procs.get(p.pid)
+                if cached is None:
+                    cached = p
+                    cached.cpu_percent(None)  # baseline na 1ª vez
+                current[p.pid] = cached
+            self._procs = current
+
+            mem = sum(p.memory_info().rss for p in current.values()) / (1024 * 1024)
+            cpu = sum(p.cpu_percent(None) for p in current.values())
+            threads = sum(p.num_threads() for p in current.values())
+            return {
+                "alive": True,
+                "memory_mb": round(mem, 1),
+                "cpu_percent": round(cpu, 1),
+                "threads": threads,
+            }
+        except Exception:  # noqa: BLE001 - processo morto/sem acesso
+            return {"alive": False}
 
     async def _activate_runtime(self) -> None:
         """Ativa o runtime in-kernel (viewers ricos do PyKortex), best-effort."""
@@ -286,6 +348,7 @@ class KernelSession:
             return
         await self._km.restart_kernel(now=True)
         await self._client.wait_for_ready(timeout=60)
+        self._attach_proc()
         await self._activate_runtime()
 
     async def shutdown(self) -> None:

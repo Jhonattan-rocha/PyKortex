@@ -3,6 +3,7 @@ import { useEngine } from './engine/useEngine'
 import { ConsoleView } from './components/ConsoleView'
 import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
+import { StatusBar } from './components/StatusBar'
 import { CodeEditor } from './editor/Editor'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
 import { loadState, saveState } from './engine/persistence'
@@ -56,6 +57,7 @@ export function App(): JSX.Element {
     kernel,
     executions,
     variables,
+    stats,
     errorText,
     execute,
     interrupt,
@@ -66,6 +68,8 @@ export function App(): JSX.Element {
     pageDataFrame,
     requestApp
   } = useEngine()
+
+  const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
 
   const [tabs, setTabs] = useState<Tab[]>([newScratch()])
   const [activeId, setActiveId] = useState<string>(SCRATCH_ID)
@@ -440,6 +444,16 @@ export function App(): JSX.Element {
           <ConsoleView executions={executions} fetchPage={pageDataFrame} onRequest={requestApp} />
         </section>
       </main>
+
+      <StatusBar
+        conn={conn}
+        kernel={kernel}
+        stats={stats}
+        execCount={execCount}
+        varCount={variables.length}
+        onInterrupt={interrupt}
+        onRestart={restart}
+      />
     </div>
   )
 }

@@ -56,6 +56,13 @@ export interface VariableInfo {
   summary: string
 }
 export type VariablesMsg = { type: 'variables'; variables: VariableInfo[] }
+export interface KernelStats {
+  alive: boolean
+  memory_mb?: number
+  cpu_percent?: number
+  threads?: number
+}
+export type KernelStatsMsg = { type: 'kernel_stats'; stats: KernelStats }
 export type DfRowsMsg = {
   type: 'df_rows'
   reqId: number
@@ -85,6 +92,7 @@ export type ServerMessage =
   | KernelErrorMsg
   | RestartedMsg
   | VariablesMsg
+  | KernelStatsMsg
   | DfRowsMsg
   | ApiResponseMsg
 

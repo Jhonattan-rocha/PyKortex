@@ -73,6 +73,10 @@ async def _h_inspect(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "variables", "variables": await session.inspect()}
 
 
+async def _h_stats(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    yield {"type": "kernel_stats", "stats": session.stats()}
+
+
 async def _h_clear_vars(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     cleared = await session.clear_vars()
     yield {"type": "variables", "variables": await session.inspect(), "cleared": cleared}
@@ -121,6 +125,7 @@ HANDLERS: dict[str, Handler] = {
     "execute_request": _h_execute,
     "interrupt": _h_interrupt,
     "inspect": _h_inspect,
+    "stats": _h_stats,
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
     "api_request": _h_api_request,

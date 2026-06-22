@@ -1107,6 +1107,63 @@ button:disabled {
   color: #9cdcfe;
 }
 
+/* status bar / task manager */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 3px 12px;
+  background: var(--bg-3);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--fg-dim);
+}
+.sb-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg);
+}
+.sb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+}
+.sb-state--open .sb-dot {
+  background: var(--accent);
+}
+.sb-state--busy .sb-dot {
+  background: #d7ba7d;
+  animation: sb-pulse 1s ease-in-out infinite;
+}
+.sb-state--error .sb-dot,
+.sb-state--closed .sb-dot {
+  background: var(--error);
+}
+@keyframes sb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.sb-metric strong {
+  color: var(--fg);
+}
+.sb-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.sb-actions button {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
 .banner {
   padding: 8px 12px;
   font-family: var(--mono);

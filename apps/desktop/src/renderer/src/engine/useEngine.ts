@@ -5,6 +5,7 @@ import type {
   DfPage,
   DfView,
   KernelState,
+  KernelStats,
   OutputMessage,
   ServerMessage,
   VariableInfo
@@ -25,6 +26,7 @@ export interface UseEngine {
   kernel: KernelState
   executions: Execution[]
   variables: VariableInfo[]
+  stats: KernelStats | null
   errorText: string | null
   execute: (code: string) => void
   interrupt: () => void
@@ -55,6 +57,7 @@ export function useEngine(): UseEngine {
   const [kernel, setKernel] = useState<KernelState>('starting')
   const [executions, setExecutions] = useState<Execution[]>([])
   const [variables, setVariables] = useState<VariableInfo[]>([])
+  const [stats, setStats] = useState<KernelStats | null>(null)
   const [errorText, setErrorText] = useState<string | null>(null)
 
   const patch = (id: number, fn: (ex: Execution) => Execution): void =>
@@ -109,6 +112,10 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'variables') {
         setVariables(msg.variables)
+        return
+      }
+      if (msg.type === 'kernel_stats') {
+        setStats(msg.stats)
         return
       }
       if (msg.type === 'df_rows') {
@@ -192,6 +199,15 @@ export function useEngine(): UseEngine {
       ws?.close()
     }
   }, [])
+
+  // polling das métricas do kernel (a cada 1.5s, enquanto conectado)
+  useEffect(() => {
+    if (conn !== 'open') return
+    const poll = (): void => wsRef.current?.send(JSON.stringify({ type: 'stats' }))
+    poll()
+    const id = setInterval(poll, 1500)
+    return () => clearInterval(id)
+  }, [conn])
 
   const execute = useCallback((code: string) => {
     const ws = wsRef.current
@@ -283,6 +299,7 @@ export function useEngine(): UseEngine {
     kernel,
     executions,
     variables,
+    stats,
     errorText,
     execute,
     interrupt,
