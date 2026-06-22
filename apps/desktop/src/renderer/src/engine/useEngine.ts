@@ -3,8 +3,10 @@ import type {
   ApiRequestOpts,
   ApiResponse,
   CompleteResult,
+  Diagnostic,
   DfPage,
   DfView,
+  HoverResult,
   KernelState,
   KernelStats,
   OutputMessage,
@@ -38,6 +40,8 @@ export interface UseEngine {
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
   requestApp: (opts: ApiRequestOpts) => Promise<ApiResponse>
   complete: (code: string, cursorPos: number) => Promise<CompleteResult>
+  lint: (code: string) => Promise<Diagnostic[]>
+  hover: (code: string, line: number, col: number) => Promise<HoverResult>
 }
 
 const EMPTY_COMPLETE: CompleteResult = { matches: [], cursor_start: 0, cursor_end: 0, types: [] }
@@ -139,6 +143,18 @@ export function useEngine(): UseEngine {
           cursor_start: msg.cursor_start,
           cursor_end: msg.cursor_end,
           types: msg.types ?? []
+        })
+        return
+      }
+      if (msg.type === 'lint_reply') {
+        resolveRequest(msg.reqId, msg.diagnostics ?? [])
+        return
+      }
+      if (msg.type === 'hover_reply') {
+        resolveRequest(msg.reqId, {
+          name: msg.name,
+          kind: msg.kind,
+          docstring: msg.docstring
         })
         return
       }
@@ -316,6 +332,24 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const lint = useCallback(
+    (code: string): Promise<Diagnostic[]> =>
+      sendRequest<Diagnostic[]>(
+        { type: 'lint', code },
+        { unavailable: [], onTimeout: [], timeoutMs: 4000 }
+      ),
+    [sendRequest]
+  )
+
+  const hover = useCallback(
+    (code: string, line: number, col: number): Promise<HoverResult> =>
+      sendRequest<HoverResult>(
+        { type: 'hover', code, line, col },
+        { unavailable: {}, onTimeout: {}, timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
   return {
     conn,
     kernel,
@@ -331,6 +365,8 @@ export function useEngine(): UseEngine {
     clearVars,
     pageDataFrame,
     requestApp,
-    complete
+    complete,
+    lint,
+    hover
   }
 }

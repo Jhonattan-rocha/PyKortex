@@ -68,7 +68,9 @@ export function App(): JSX.Element {
     clearVars,
     pageDataFrame,
     requestApp,
-    complete
+    complete,
+    lint,
+    hover
   } = useEngine()
 
   const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
@@ -443,6 +445,8 @@ export function App(): JSX.Element {
               onRun={run}
               onSave={save}
               onComplete={complete}
+              onLint={lint}
+              onHover={hover}
             />
           </div>
           <div className="hint">

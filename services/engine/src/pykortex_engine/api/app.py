@@ -8,6 +8,7 @@ Expõe:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -16,7 +17,7 @@ from typing import Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from pykortex_engine import __version__
+from pykortex_engine import __version__, analysis
 from pykortex_engine.api.files_router import router as files_router
 from pykortex_engine.kernels import KernelSession, get_session
 
@@ -82,6 +83,18 @@ async def _h_complete(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "complete_reply", "reqId": msg.get("reqId"), **result}
 
 
+async def _h_lint(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    diags = await asyncio.to_thread(analysis.lint, msg.get("code", ""))
+    yield {"type": "lint_reply", "reqId": msg.get("reqId"), "diagnostics": diags}
+
+
+async def _h_hover(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    res = await asyncio.to_thread(
+        analysis.hover, msg.get("code", ""), msg.get("line", 1), msg.get("col", 0)
+    )
+    yield {"type": "hover_reply", "reqId": msg.get("reqId"), **res}
+
+
 async def _h_clear_vars(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     cleared = await session.clear_vars()
     yield {"type": "variables", "variables": await session.inspect(), "cleared": cleared}
@@ -132,6 +145,8 @@ HANDLERS: dict[str, Handler] = {
     "inspect": _h_inspect,
     "stats": _h_stats,
     "complete": _h_complete,
+    "lint": _h_lint,
+    "hover": _h_hover,
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
     "api_request": _h_api_request,

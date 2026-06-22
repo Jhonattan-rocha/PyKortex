@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import { monaco } from './monacoSetup'
 import { cellAtLine, parseCells } from './cells'
-import type { CompleteResult } from '../engine/protocol'
+import type { CompleteResult, Diagnostic, HoverResult } from '../engine/protocol'
 
 type Editor = monaco.editor.IStandaloneCodeEditor
 
@@ -15,6 +15,10 @@ export interface EditorProps {
   onSave: (code: string) => void
   /** completar via kernel (jedi + namespace vivo) */
   onComplete: (code: string, cursorPos: number) => Promise<CompleteResult>
+  /** diagnósticos (pyflakes) do conteúdo */
+  onLint: (code: string) => Promise<Diagnostic[]>
+  /** doc/assinatura do símbolo (jedi) */
+  onHover: (code: string, line: number, col: number) => Promise<HoverResult>
   /** id/caminho da aba ativa: cria um model dedicado por arquivo (preserva undo/cursor) */
   path?: string
 }
@@ -54,6 +58,8 @@ export function CodeEditor({
   onRun,
   onSave,
   onComplete,
+  onLint,
+  onHover,
   path
 }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
@@ -63,6 +69,52 @@ export function CodeEditor({
   onSaveRef.current = onSave
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
+  const onLintRef = useRef(onLint)
+  onLintRef.current = onLint
+  const onHoverRef = useRef(onHover)
+  onHoverRef.current = onHover
+
+  // diagnósticos (squiggles): re-lint debounced a cada mudança de conteúdo
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      void (async () => {
+        const model = editorRef.current?.getModel()
+        if (!model) return
+        const diags = await onLintRef.current(model.getValue())
+        if (model.isDisposed()) return
+        const markers = diags.map((d) => {
+          const word = model.getWordAtPosition({ lineNumber: d.line, column: d.col + 1 })
+          return {
+            startLineNumber: d.line,
+            startColumn: word ? word.startColumn : d.col + 1,
+            endLineNumber: d.line,
+            endColumn: word ? word.endColumn : d.col + 2,
+            message: d.message,
+            severity:
+              d.severity === 'error'
+                ? monaco.MarkerSeverity.Error
+                : monaco.MarkerSeverity.Warning
+          }
+        })
+        monaco.editor.setModelMarkers(model, 'pykortex', markers)
+      })()
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [value])
+
+  // provider de hover (jedi): doc/assinatura ao passar o mouse
+  useEffect(() => {
+    const provider = monaco.languages.registerHoverProvider('python', {
+      async provideHover(model, position) {
+        const res = await onHoverRef.current(model.getValue(), position.lineNumber, position.column - 1)
+        if (!res.name && !res.docstring) return null
+        const header = res.name ? `**${res.name}**${res.kind ? ` *(${res.kind})*` : ''}` : ''
+        const doc = res.docstring ? '```text\n' + res.docstring.slice(0, 1500) + '\n```' : ''
+        return { contents: [header, doc].filter(Boolean).map((value) => ({ value })) }
+      }
+    })
+    return () => provider.dispose()
+  }, [])
 
   // provider de autocomplete (kernel: jedi + namespace vivo), registrado 1x
   useEffect(() => {

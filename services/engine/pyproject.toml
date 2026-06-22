@@ -11,6 +11,8 @@ dependencies = [
     "ipykernel>=6.29",
     "pydantic>=2.6",
     "psutil>=5.9",
+    "jedi>=0.19",
+    "pyflakes>=3.0",
 ]
 
 [project.optional-dependencies]

@@ -24,6 +24,17 @@ export interface CompleteResult {
   cursor_end: number
   types: string[]
 }
+export interface Diagnostic {
+  line: number
+  col: number
+  message: string
+  severity: 'error' | 'warning'
+}
+export interface HoverResult {
+  name?: string
+  kind?: string
+  docstring?: string
+}
 export type ClientMessage =
   | ExecuteRequest
   | InterruptRequest
@@ -86,6 +97,14 @@ export type CompleteReplyMsg = {
   cursor_end: number
   types: string[]
 }
+export type LintReplyMsg = { type: 'lint_reply'; reqId: number; diagnostics: Diagnostic[] }
+export type HoverReplyMsg = {
+  type: 'hover_reply'
+  reqId: number
+  name?: string
+  kind?: string
+  docstring?: string
+}
 /** Resultado de uma página: linhas + total da view (filtrada). */
 export interface DfPage {
   rows: DfRow[]
@@ -110,6 +129,8 @@ export type ServerMessage =
   | DfRowsMsg
   | ApiResponseMsg
   | CompleteReplyMsg
+  | LintReplyMsg
+  | HoverReplyMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg
