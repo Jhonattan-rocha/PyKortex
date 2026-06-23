@@ -6,11 +6,13 @@ import type {
   Diagnostic,
   DfPage,
   DfView,
+  GotoDef,
   HoverResult,
   KernelState,
   KernelStats,
   OutputMessage,
   ServerMessage,
+  SignatureInfo,
   VariableInfo
 } from './protocol'
 
@@ -42,6 +44,8 @@ export interface UseEngine {
   complete: (code: string, cursorPos: number) => Promise<CompleteResult>
   lint: (code: string) => Promise<Diagnostic[]>
   hover: (code: string, line: number, col: number) => Promise<HoverResult>
+  signatures: (code: string, line: number, col: number) => Promise<SignatureInfo[]>
+  goto: (code: string, line: number, col: number) => Promise<GotoDef[]>
 }
 
 const EMPTY_COMPLETE: CompleteResult = { matches: [], cursor_start: 0, cursor_end: 0, types: [] }
@@ -156,6 +160,14 @@ export function useEngine(): UseEngine {
           kind: msg.kind,
           docstring: msg.docstring
         })
+        return
+      }
+      if (msg.type === 'signature_reply') {
+        resolveRequest(msg.reqId, msg.signatures ?? [])
+        return
+      }
+      if (msg.type === 'goto_reply') {
+        resolveRequest(msg.reqId, msg.definitions ?? [])
         return
       }
       if (msg.type === 'kernel_error') {
@@ -350,6 +362,24 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const signatures = useCallback(
+    (code: string, line: number, col: number): Promise<SignatureInfo[]> =>
+      sendRequest<SignatureInfo[]>(
+        { type: 'signature', code, line, col },
+        { unavailable: [], onTimeout: [], timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
+  const goto = useCallback(
+    (code: string, line: number, col: number): Promise<GotoDef[]> =>
+      sendRequest<GotoDef[]>(
+        { type: 'goto', code, line, col },
+        { unavailable: [], onTimeout: [], timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
   return {
     conn,
     kernel,
@@ -367,6 +397,8 @@ export function useEngine(): UseEngine {
     requestApp,
     complete,
     lint,
-    hover
+    hover,
+    signatures,
+    goto
   }
 }

@@ -84,3 +84,17 @@ def signatures(code: str, line: int, col: int) -> list[dict[str, Any]]:
         return out
     except Exception:  # noqa: BLE001
         return []
+
+
+def goto(code: str, line: int, col: int) -> list[dict[str, Any]]:
+    """Definição do símbolo na posição (jedi goto). path=None => mesmo arquivo."""
+    try:
+        import jedi
+
+        out: list[dict[str, Any]] = []
+        for d in jedi.Script(code=code).goto(line, col, follow_imports=True):
+            p = d.module_path
+            out.append({"path": str(p) if p else None, "line": d.line or 1, "col": d.column or 0})
+        return out
+    except Exception:  # noqa: BLE001
+        return []

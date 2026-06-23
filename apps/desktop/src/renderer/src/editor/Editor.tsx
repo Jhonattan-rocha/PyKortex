@@ -2,7 +2,13 @@ import { useEffect, useRef } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import { monaco } from './monacoSetup'
 import { cellAtLine, parseCells } from './cells'
-import type { CompleteResult, Diagnostic, HoverResult } from '../engine/protocol'
+import type {
+  CompleteResult,
+  Diagnostic,
+  GotoDef,
+  HoverResult,
+  SignatureInfo
+} from '../engine/protocol'
 
 type Editor = monaco.editor.IStandaloneCodeEditor
 
@@ -19,6 +25,14 @@ export interface EditorProps {
   onLint: (code: string) => Promise<Diagnostic[]>
   /** doc/assinatura do símbolo (jedi) */
   onHover: (code: string, line: number, col: number) => Promise<HoverResult>
+  /** assinaturas da chamada (jedi) */
+  onSignature: (code: string, line: number, col: number) => Promise<SignatureInfo[]>
+  /** definição do símbolo (jedi) */
+  onGoto: (code: string, line: number, col: number) => Promise<GotoDef[]>
+  /** abrir definição em outro arquivo (path absoluto) */
+  onOpenDefinition: (path: string, line: number, col: number) => void
+  /** posição a revelar (go-to cross-file); nonce força re-trigger */
+  reveal?: { line: number; col: number; nonce: number }
   /** id/caminho da aba ativa: cria um model dedicado por arquivo (preserva undo/cursor) */
   path?: string
 }
@@ -60,6 +74,10 @@ export function CodeEditor({
   onComplete,
   onLint,
   onHover,
+  onSignature,
+  onGoto,
+  onOpenDefinition,
+  reveal,
   path
 }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
@@ -73,6 +91,22 @@ export function CodeEditor({
   onLintRef.current = onLint
   const onHoverRef = useRef(onHover)
   onHoverRef.current = onHover
+  const onSignatureRef = useRef(onSignature)
+  onSignatureRef.current = onSignature
+  const onGotoRef = useRef(onGoto)
+  onGotoRef.current = onGoto
+  const onOpenDefinitionRef = useRef(onOpenDefinition)
+  onOpenDefinitionRef.current = onOpenDefinition
+
+  // reveal de posição (go-to cross-file): posiciona o cursor após abrir o arquivo
+  useEffect(() => {
+    if (!reveal) return
+    const editor = editorRef.current
+    if (!editor) return
+    editor.revealLineInCenter(reveal.line)
+    editor.setPosition({ lineNumber: reveal.line, column: reveal.col + 1 })
+    editor.focus()
+  }, [reveal])
 
   // diagnósticos (squiggles): re-lint debounced a cada mudança de conteúdo
   useEffect(() => {
@@ -111,6 +145,63 @@ export function CodeEditor({
         const header = res.name ? `**${res.name}**${res.kind ? ` *(${res.kind})*` : ''}` : ''
         const doc = res.docstring ? '```text\n' + res.docstring.slice(0, 1500) + '\n```' : ''
         return { contents: [header, doc].filter(Boolean).map((value) => ({ value })) }
+      }
+    })
+    return () => provider.dispose()
+  }, [])
+
+  // signature help (jedi): dicas de parâmetro ao digitar '(' / ','
+  useEffect(() => {
+    const provider = monaco.languages.registerSignatureHelpProvider('python', {
+      signatureHelpTriggerCharacters: ['(', ','],
+      signatureHelpRetriggerCharacters: [','],
+      async provideSignatureHelp(model, position) {
+        const sigs = await onSignatureRef.current(
+          model.getValue(),
+          position.lineNumber,
+          position.column - 1
+        )
+        if (sigs.length === 0) return null
+        return {
+          value: {
+            signatures: sigs.map((s) => ({
+              label: s.label,
+              parameters: s.params.map((p) => ({ label: p }))
+            })),
+            activeSignature: 0,
+            activeParameter: sigs[0].active
+          },
+          dispose() {}
+        }
+      }
+    })
+    return () => provider.dispose()
+  }, [])
+
+  // go-to-definition (jedi): in-file via Monaco; cross-file abre o arquivo
+  useEffect(() => {
+    const provider = monaco.languages.registerDefinitionProvider('python', {
+      async provideDefinition(model, position) {
+        const defs = await onGotoRef.current(
+          model.getValue(),
+          position.lineNumber,
+          position.column - 1
+        )
+        const inFile = defs.filter((d) => !d.path)
+        if (inFile.length > 0) {
+          return inFile.map((d) => ({
+            uri: model.uri,
+            range: {
+              startLineNumber: d.line,
+              startColumn: d.col + 1,
+              endLineNumber: d.line,
+              endColumn: d.col + 1
+            }
+          }))
+        }
+        const ext = defs.find((d) => d.path)
+        if (ext) onOpenDefinitionRef.current(ext.path as string, ext.line, ext.col)
+        return []
       }
     })
     return () => provider.dispose()

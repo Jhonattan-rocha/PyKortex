@@ -35,6 +35,16 @@ export interface HoverResult {
   kind?: string
   docstring?: string
 }
+export interface SignatureInfo {
+  label: string
+  params: string[]
+  active: number
+}
+export interface GotoDef {
+  path: string | null // null = mesmo arquivo
+  line: number
+  col: number
+}
 export type ClientMessage =
   | ExecuteRequest
   | InterruptRequest
@@ -105,6 +115,12 @@ export type HoverReplyMsg = {
   kind?: string
   docstring?: string
 }
+export type SignatureReplyMsg = {
+  type: 'signature_reply'
+  reqId: number
+  signatures: SignatureInfo[]
+}
+export type GotoReplyMsg = { type: 'goto_reply'; reqId: number; definitions: GotoDef[] }
 /** Resultado de uma página: linhas + total da view (filtrada). */
 export interface DfPage {
   rows: DfRow[]
@@ -131,6 +147,8 @@ export type ServerMessage =
   | CompleteReplyMsg
   | LintReplyMsg
   | HoverReplyMsg
+  | SignatureReplyMsg
+  | GotoReplyMsg
 
 /** Mensagens de saída que pertencem a uma execução (vão pro corpo do bloco). */
 export type OutputMessage = StreamMsg | ExecuteResultMsg | DisplayDataMsg | ErrorMsg

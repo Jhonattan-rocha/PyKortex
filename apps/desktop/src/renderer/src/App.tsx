@@ -70,7 +70,9 @@ export function App(): JSX.Element {
     requestApp,
     complete,
     lint,
-    hover
+    hover,
+    signatures,
+    goto
   } = useEngine()
 
   const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
@@ -82,6 +84,8 @@ export function App(): JSX.Element {
   const [autoSave, setAutoSave] = useState(false)
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
+  const revealNonce = useRef(0)
+  const [reveal, setReveal] = useState<{ line: number; col: number; nonce: number } | undefined>()
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
   const connected = conn === 'open'
@@ -142,6 +146,24 @@ export function App(): JSX.Element {
       }
     },
     [tabs]
+  )
+
+  // go-to-definition cross-file: abre o arquivo (se no workspace) e posiciona
+  const onOpenDefinition = useCallback(
+    async (absPath: string, line: number, col: number) => {
+      if (!workspaceRoot) {
+        setFsError('Abra a pasta do projeto para navegar até a definição.')
+        return
+      }
+      const rel = toWorkspaceRelative(absPath, workspaceRoot)
+      if (!rel) {
+        setFsError(`Definição em biblioteca externa: ${absPath}:${line}`)
+        return
+      }
+      await openFile(rel)
+      setReveal({ line, col, nonce: ++revealNonce.current })
+    },
+    [workspaceRoot, openFile]
   )
 
   const openFileFromDialog = useCallback(async () => {
@@ -447,6 +469,10 @@ export function App(): JSX.Element {
               onComplete={complete}
               onLint={lint}
               onHover={hover}
+              onSignature={signatures}
+              onGoto={goto}
+              onOpenDefinition={onOpenDefinition}
+              reveal={reveal}
             />
           </div>
           <div className="hint">

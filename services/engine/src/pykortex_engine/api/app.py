@@ -95,6 +95,20 @@ async def _h_hover(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "hover_reply", "reqId": msg.get("reqId"), **res}
 
 
+async def _h_signature(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    sigs = await asyncio.to_thread(
+        analysis.signatures, msg.get("code", ""), msg.get("line", 1), msg.get("col", 0)
+    )
+    yield {"type": "signature_reply", "reqId": msg.get("reqId"), "signatures": sigs}
+
+
+async def _h_goto(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    defs = await asyncio.to_thread(
+        analysis.goto, msg.get("code", ""), msg.get("line", 1), msg.get("col", 0)
+    )
+    yield {"type": "goto_reply", "reqId": msg.get("reqId"), "definitions": defs}
+
+
 async def _h_clear_vars(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     cleared = await session.clear_vars()
     yield {"type": "variables", "variables": await session.inspect(), "cleared": cleared}
@@ -147,6 +161,8 @@ HANDLERS: dict[str, Handler] = {
     "complete": _h_complete,
     "lint": _h_lint,
     "hover": _h_hover,
+    "signature": _h_signature,
+    "goto": _h_goto,
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
     "api_request": _h_api_request,
