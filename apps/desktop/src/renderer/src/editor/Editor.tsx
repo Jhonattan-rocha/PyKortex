@@ -304,7 +304,9 @@ export function CodeEditor({
         automaticLayout: true,
         renderWhitespace: 'selection',
         tabSize: 4,
-        rulers: [88]
+        rulers: [88],
+        // renderiza popups (autocomplete, hover) num layer no body, sem clip do container
+        fixedOverflowWidgets: true
       }}
     />
   )

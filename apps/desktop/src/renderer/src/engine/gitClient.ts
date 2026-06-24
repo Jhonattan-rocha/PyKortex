@@ -40,6 +40,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const gitStatus = (): Promise<GitStatus> => getJson('/git/status')
+export const gitShow = (path: string, rev = 'HEAD'): Promise<{ content: string }> =>
+  getJson(`/git/show?path=${encodeURIComponent(path)}&rev=${encodeURIComponent(rev)}`)
 export const gitInit = (): Promise<GitResult> => postJson('/git/init', {})
 export const gitStage = (paths: string[]): Promise<GitResult> => postJson('/git/stage', { paths })
 export const gitUnstage = (paths: string[]): Promise<GitResult> =>

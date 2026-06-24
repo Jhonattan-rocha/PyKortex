@@ -40,6 +40,14 @@ async def git_diff(path: str, staged: bool = False) -> dict:
     return git.diff(root, path, staged)
 
 
+@router.get("/show")
+async def git_show(path: str, rev: str = "HEAD") -> dict:
+    root = _root()
+    if root is None:
+        return {"path": path, "rev": rev, "content": ""}
+    return git.show(root, path, rev)
+
+
 @router.post("/init")
 async def git_init() -> dict:
     root = _root()

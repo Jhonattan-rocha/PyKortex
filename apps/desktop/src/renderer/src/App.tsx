@@ -5,9 +5,11 @@ import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
 import { StatusBar } from './components/StatusBar'
+import { DiffView, languageFromPath, type DiffData } from './components/DiffView'
 import { CodeEditor } from './editor/Editor'
 import { parseCells } from './editor/cells'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
+import { gitShow } from './engine/gitClient'
 import { loadState, saveState } from './engine/persistence'
 
 const SAMPLE = `# %% imports
@@ -84,6 +86,7 @@ export function App(): JSX.Element {
   const [fsError, setFsError] = useState<string | null>(null)
   const [autoSave, setAutoSave] = useState(false)
   const [sidebarView, setSidebarView] = useState<'files' | 'git'>('files')
+  const [diffView, setDiffView] = useState<DiffData | null>(null)
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -149,6 +152,17 @@ export function App(): JSX.Element {
     },
     [tabs]
   )
+
+  // git: mostra o diff do arquivo (HEAD vs working) no DiffEditor
+  const showDiff = useCallback(async (path: string) => {
+    const [original, modified] = await Promise.all([
+      gitShow(path)
+        .then((r) => r.content)
+        .catch(() => ''),
+      readFile(path).catch(() => '')
+    ])
+    setDiffView({ title: path, original, modified, language: languageFromPath(path) })
+  }, [])
 
   // go-to-definition cross-file: abre o arquivo (se no workspace) e posiciona
   const onOpenDefinition = useCallback(
@@ -425,7 +439,7 @@ export function App(): JSX.Element {
                 />
               </>
             ) : (
-              <GitPanel root={workspaceRoot} onOpen={openFile} />
+              <GitPanel root={workspaceRoot} onOpen={showDiff} />
             )}
           </div>
           <div className="sidebar-section sidebar-section--vars">
@@ -439,6 +453,10 @@ export function App(): JSX.Element {
         </aside>
 
         <section className="pane pane--editor">
+          {diffView ? (
+            <DiffView data={diffView} onClose={() => setDiffView(null)} />
+          ) : (
+            <>
           <div className="tabbar">
             {tabs.map((t) => (
               <div
@@ -500,6 +518,8 @@ export function App(): JSX.Element {
             Ctrl+Enter: célula · Shift+Enter: célula e avança · Ctrl+Shift+Enter: tudo · Ctrl+S:
             salvar · células com <code>{'# %%'}</code>
           </div>
+            </>
+          )}
         </section>
 
         <section className="pane pane--output">

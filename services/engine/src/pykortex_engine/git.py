@@ -123,3 +123,9 @@ def diff(root: str, path: str, staged: bool) -> dict[str, Any]:
     args += ["--", path]
     r = _run(root, args)
     return {"path": path, "staged": staged, "diff": r.stdout}
+
+
+def show(root: str, path: str, rev: str = "HEAD") -> dict[str, Any]:
+    """Conteúdo de um arquivo numa revisão (git show rev:path); '' se não existir."""
+    r = _run(root, ["show", f"{rev}:{path}"])
+    return {"path": path, "rev": rev, "content": r.stdout if r.returncode == 0 else ""}

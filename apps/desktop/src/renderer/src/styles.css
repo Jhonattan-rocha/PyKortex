@@ -293,6 +293,48 @@ button:disabled {
   border-top: 1px solid var(--border);
 }
 
+/* diff viewer (git) */
+.diffview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.diffview__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.diffview__title {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+.diffview__tag {
+  font-size: 10px;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+.diffview__close {
+  margin-left: auto;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.diffview__body {
+  flex: 1;
+  min-height: 0;
+}
+
 /* abas do sidebar (Arquivos / Git) */
 .sidebar-tabs {
   display: flex;
