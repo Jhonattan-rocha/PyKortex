@@ -3,9 +3,12 @@ import {
   gitCommit,
   gitDiscard,
   gitInit,
+  gitLog,
+  gitReset,
   gitStage,
   gitStatus,
   gitUnstage,
+  type GitCommit,
   type GitFile,
   type GitStatus
 } from '../engine/gitClient'
@@ -27,11 +30,15 @@ export function GitPanel({
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<'changes' | 'history'>('changes')
+  const [commits, setCommits] = useState<GitCommit[]>([])
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      setStatus(await gitStatus())
+      const [st, lg] = await Promise.all([gitStatus(), gitLog()])
+      setStatus(st)
+      setCommits(lg.commits)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -83,6 +90,27 @@ export function GitPanel({
         </button>
       </div>
 
+      <div className="git-tabs">
+        <button
+          className={`git-tab${view === 'changes' ? ' git-tab--active' : ''}`}
+          onClick={() => setView('changes')}
+        >
+          Mudanças
+        </button>
+        <button
+          className={`git-tab${view === 'history' ? ' git-tab--active' : ''}`}
+          onClick={() => setView('history')}
+        >
+          Histórico
+        </button>
+      </div>
+
+      {error && <div className="git-error">{error}</div>}
+
+      {view === 'history' ? (
+        <GitHistory commits={commits} onReset={(rev, mode) => void act(() => gitReset(rev, mode))} />
+      ) : (
+        <>
       <div className="git-commit">
         <textarea
           className="git-msg"
@@ -103,8 +131,6 @@ export function GitPanel({
           ✓ Commit ({staged.length})
         </button>
       </div>
-
-      {error && <div className="git-error">{error}</div>}
 
       <div className="git-lists">
         {staged.length > 0 && (
@@ -162,6 +188,63 @@ export function GitPanel({
           <div className="git--clean">✓ Nada para commitar, árvore limpa.</div>
         )}
       </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function GitHistory({
+  commits,
+  onReset
+}: {
+  commits: GitCommit[]
+  onReset: (rev: string, mode: 'soft' | 'mixed' | 'hard') => void
+}): JSX.Element {
+  const [openHash, setOpenHash] = useState<string | null>(null)
+
+  if (commits.length === 0) {
+    return <div className="git--empty">Nenhum commit ainda.</div>
+  }
+
+  const doReset = (c: GitCommit, mode: 'soft' | 'mixed' | 'hard'): void => {
+    const labels = {
+      soft: 'soft — move o HEAD, mantém suas mudanças staged',
+      mixed: 'mixed — move o HEAD, mantém mudanças (unstaged)',
+      hard: 'HARD — DESCARTA todas as mudanças não commitadas (irreversível)'
+    }
+    const msg =
+      `Reset ${labels[mode]}\n\npara o commit ${c.short} "${c.subject}"?` +
+      (mode === 'hard' ? '\n\n⚠️ Você vai PERDER mudanças não commitadas.' : '')
+    if (window.confirm(msg)) {
+      onReset(c.hash, mode)
+      setOpenHash(null)
+    }
+  }
+
+  return (
+    <div className="git-history">
+      {commits.map((c) => (
+        <div key={c.hash} className="git-commit-row">
+          <div className="git-commit-row__main" onClick={() => setOpenHash((h) => (h === c.hash ? null : c.hash))}>
+            <span className="git-commit-row__hash">{c.short}</span>
+            <span className="git-commit-row__subject">{c.subject}</span>
+          </div>
+          <div className="git-commit-row__meta">
+            {c.author} · {c.date}
+          </div>
+          {openHash === c.hash && (
+            <div className="git-reset-bar">
+              <span className="git-reset-bar__label">reset:</span>
+              <button onClick={() => doReset(c, 'soft')}>soft</button>
+              <button onClick={() => doReset(c, 'mixed')}>mixed</button>
+              <button className="git-reset-bar__hard" onClick={() => doReset(c, 'hard')}>
+                hard
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

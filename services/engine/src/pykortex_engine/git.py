@@ -129,3 +129,36 @@ def show(root: str, path: str, rev: str = "HEAD") -> dict[str, Any]:
     """Conteúdo de um arquivo numa revisão (git show rev:path); '' se não existir."""
     r = _run(root, ["show", f"{rev}:{path}"])
     return {"path": path, "rev": rev, "content": r.stdout if r.returncode == 0 else ""}
+
+
+def log(root: str, limit: int = 50) -> dict[str, Any]:
+    """Histórico de commits (hash, autor, data relativa, assunto)."""
+    if not is_repo(root):
+        return {"commits": []}
+    # \x1f separa campos; uma linha por commit (%s é só a 1ª linha do assunto)
+    fmt = "%H%x1f%h%x1f%an%x1f%ar%x1f%s"
+    r = _run(root, ["log", f"-n{int(limit)}", f"--pretty=format:{fmt}"])
+    if r.returncode != 0:
+        return {"commits": []}
+    commits: list[dict[str, Any]] = []
+    for line in r.stdout.splitlines():
+        parts = line.split("\x1f")
+        if len(parts) == 5:
+            commits.append(
+                {
+                    "hash": parts[0],
+                    "short": parts[1],
+                    "author": parts[2],
+                    "date": parts[3],
+                    "subject": parts[4],
+                }
+            )
+    return {"commits": commits}
+
+
+def reset(root: str, rev: str, mode: str = "mixed") -> dict[str, Any]:
+    """git reset --<mode> <rev>. mode: soft (mantém staged) / mixed / hard (descarta)."""
+    if mode not in ("soft", "mixed", "hard"):
+        mode = "mixed"
+    r = _run(root, ["reset", f"--{mode}", rev])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}

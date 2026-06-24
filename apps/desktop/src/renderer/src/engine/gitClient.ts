@@ -20,6 +20,13 @@ export interface GitResult {
   ok: boolean
   message: string
 }
+export interface GitCommit {
+  hash: string
+  short: string
+  author: string
+  date: string
+  subject: string
+}
 
 async function getJson<T>(path: string): Promise<T> {
   const base = await baseUrl()
@@ -50,3 +57,7 @@ export const gitDiscard = (paths: string[]): Promise<GitResult> =>
   postJson('/git/discard', { paths })
 export const gitCommit = (message: string): Promise<GitResult> =>
   postJson('/git/commit', { message })
+export const gitLog = (limit = 50): Promise<{ commits: GitCommit[] }> =>
+  getJson(`/git/log?limit=${limit}`)
+export const gitReset = (rev: string, mode: 'soft' | 'mixed' | 'hard'): Promise<GitResult> =>
+  postJson('/git/reset', { rev, mode })

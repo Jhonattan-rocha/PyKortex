@@ -19,6 +19,11 @@ class CommitBody(BaseModel):
     message: str
 
 
+class ResetBody(BaseModel):
+    rev: str
+    mode: str = "mixed"
+
+
 def _root() -> str | None:
     root = get_workspace().root
     return str(root) if root else None
@@ -78,3 +83,15 @@ async def git_discard(body: PathsBody) -> dict:
 async def git_commit(body: CommitBody) -> dict:
     root = _root()
     return git.commit(root, body.message) if root else {"ok": False, "message": "sem workspace"}
+
+
+@router.get("/log")
+async def git_log(limit: int = 50) -> dict:
+    root = _root()
+    return git.log(root, limit) if root else {"commits": []}
+
+
+@router.post("/reset")
+async def git_reset(body: ResetBody) -> dict:
+    root = _root()
+    return git.reset(root, body.rev, body.mode) if root else {"ok": False, "message": "sem workspace"}
