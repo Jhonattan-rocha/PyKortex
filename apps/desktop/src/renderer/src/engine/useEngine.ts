@@ -4,6 +4,7 @@ import type {
   ApiResponse,
   CompleteResult,
   Diagnostic,
+  PkCommand,
   DfPage,
   DfView,
   GotoDef,
@@ -46,6 +47,8 @@ export interface UseEngine {
   hover: (code: string, line: number, col: number) => Promise<HoverResult>
   signatures: (code: string, line: number, col: number) => Promise<SignatureInfo[]>
   goto: (code: string, line: number, col: number) => Promise<GotoDef[]>
+  listCommands: () => Promise<PkCommand[]>
+  runCommand: (name: string) => void
 }
 
 const EMPTY_COMPLETE: CompleteResult = { matches: [], cursor_start: 0, cursor_end: 0, types: [] }
@@ -168,6 +171,10 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'goto_reply') {
         resolveRequest(msg.reqId, msg.definitions ?? [])
+        return
+      }
+      if (msg.type === 'commands_reply') {
+        resolveRequest(msg.reqId, msg.commands ?? [])
         return
       }
       if (msg.type === 'kernel_error') {
@@ -380,6 +387,20 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const listCommands = useCallback(
+    (): Promise<PkCommand[]> =>
+      sendRequest<PkCommand[]>(
+        { type: 'list_commands' },
+        { unavailable: [], onTimeout: [], timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
+  const runCommand = useCallback(
+    (name: string) => execute(`__import__("pykortex")._run_command(${JSON.stringify(name)})`),
+    [execute]
+  )
+
   return {
     conn,
     kernel,
@@ -399,6 +420,8 @@ export function useEngine(): UseEngine {
     lint,
     hover,
     signatures,
-    goto
+    goto,
+    listCommands,
+    runCommand
   }
 }

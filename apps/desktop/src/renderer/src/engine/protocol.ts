@@ -107,6 +107,10 @@ export type CompleteReplyMsg = {
   cursor_end: number
   types: string[]
 }
+export interface PkCommand {
+  name: string
+}
+export type CommandsReplyMsg = { type: 'commands_reply'; reqId: number; commands: PkCommand[] }
 export type LintReplyMsg = { type: 'lint_reply'; reqId: number; diagnostics: Diagnostic[] }
 export type HoverReplyMsg = {
   type: 'hover_reply'
@@ -145,6 +149,7 @@ export type ServerMessage =
   | DfRowsMsg
   | ApiResponseMsg
   | CompleteReplyMsg
+  | CommandsReplyMsg
   | LintReplyMsg
   | HoverReplyMsg
   | SignatureReplyMsg

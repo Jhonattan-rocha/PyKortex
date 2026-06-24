@@ -308,6 +308,11 @@ class KernelSession:
         data = await self._eval_expr('__import__("pykortex")._clear_namespace_json()')
         return data.get("cleared", 0) if isinstance(data, dict) else 0
 
+    async def list_commands(self) -> list[dict[str, Any]]:
+        """Lista os comandos `@pk.command` registrados (out-of-band)."""
+        data = await self._eval_expr('__import__("pykortex")._list_commands_json()')
+        return data if isinstance(data, list) else []
+
     async def complete(self, code: str, cursor_pos: int) -> dict[str, Any]:
         """Completar via o kernel (jedi + namespace vivo), na posição do cursor."""
         empty = {"matches": [], "cursor_start": cursor_pos, "cursor_end": cursor_pos, "types": []}

@@ -6,6 +6,7 @@ import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
+import { CommandPalette } from './components/CommandPalette'
 import { DiffView, languageFromPath, type DiffData } from './components/DiffView'
 import { CodeEditor } from './editor/Editor'
 import { parseCells } from './editor/cells'
@@ -56,6 +57,22 @@ const parentDir = (abs: string): string => {
   return i === -1 ? a : a.slice(0, i)
 }
 
+// --- Workspace Trust: pastas autorizadas a auto-executar extensões ---
+const TRUST_KEY = 'pykortex.trustedWorkspaces.v1'
+const EXTENSIONS_PATH = '.pykortex/extensions.py'
+function loadTrusted(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(TRUST_KEY) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+function trustWorkspace(root: string): void {
+  const s = loadTrusted()
+  s.add(root)
+  localStorage.setItem(TRUST_KEY, JSON.stringify([...s]))
+}
+
 export function App(): JSX.Element {
   const {
     conn,
@@ -76,7 +93,9 @@ export function App(): JSX.Element {
     lint,
     hover,
     signatures,
-    goto
+    goto,
+    listCommands,
+    runCommand
   } = useEngine()
 
   const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
@@ -89,6 +108,8 @@ export function App(): JSX.Element {
   const [sidebarView, setSidebarView] = useState<'files' | 'git'>('files')
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const extLoaded = useRef<Set<string>>(new Set())
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -165,6 +186,29 @@ export function App(): JSX.Element {
     ])
     setDiffView({ title: path, original, modified, language: languageFromPath(path) })
   }, [])
+
+  // extensões: carrega .pykortex/extensions.py se a pasta for confiável
+  const maybeLoadExtensions = useCallback(
+    async (root: string) => {
+      let code: string
+      try {
+        code = await readFile(EXTENSIONS_PATH)
+      } catch {
+        return // sem extensões nesta pasta
+      }
+      if (!loadTrusted().has(root)) {
+        const ok = window.confirm(
+          `Esta pasta tem extensões PyKortex (${EXTENSIONS_PATH}).\n\n` +
+            'Elas executam Python com ACESSO TOTAL ao seu kernel — como rodar um script.\n\n' +
+            'Confiar nesta pasta e carregar as extensões?'
+        )
+        if (!ok) return
+        trustWorkspace(root)
+      }
+      execute(code) // registra os @pk.command / @pk.viewer
+    },
+    [execute]
+  )
 
   // git: diff de um arquivo num commit específico (pai vs commit)
   const showCommitDiff = useCallback(async (hash: string, path: string) => {
@@ -336,17 +380,28 @@ export function App(): JSX.Element {
   }
   useEffect(() => window.pykortex.onMenu(({ action, payload }) => actionsRef.current[action]?.(payload)), [])
 
-  // Ctrl+` alterna o terminal
+  // Ctrl+` alterna o terminal · Ctrl+Shift+P abre a command palette
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault()
         setTerminalOpen((v) => !v)
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        setPaletteOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // carrega as extensões da pasta (1x por workspace, quando conectado)
+  useEffect(() => {
+    if (conn !== 'open' || !workspaceRoot) return
+    if (extLoaded.current.has(workspaceRoot)) return
+    extLoaded.current.add(workspaceRoot)
+    void maybeLoadExtensions(workspaceRoot)
+  }, [conn, workspaceRoot, maybeLoadExtensions])
 
   // auto save: salva a aba ativa (se for arquivo e estiver suja) após 800ms ocioso
   useEffect(() => {
@@ -576,6 +631,14 @@ export function App(): JSX.Element {
         onInterrupt={interrupt}
         onRestart={restart}
       />
+
+      {paletteOpen && (
+        <CommandPalette
+          listCommands={listCommands}
+          onRun={runCommand}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   )
 }

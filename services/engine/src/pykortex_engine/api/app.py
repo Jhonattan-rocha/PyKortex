@@ -82,6 +82,14 @@ async def _h_stats(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "kernel_stats", "stats": session.stats()}
 
 
+async def _h_list_commands(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    yield {
+        "type": "commands_reply",
+        "reqId": msg.get("reqId"),
+        "commands": await session.list_commands(),
+    }
+
+
 async def _h_complete(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     result = await session.complete(msg.get("code", ""), msg.get("cursor_pos", 0))
     yield {"type": "complete_reply", "reqId": msg.get("reqId"), **result}
@@ -162,6 +170,7 @@ HANDLERS: dict[str, Handler] = {
     "interrupt": _h_interrupt,
     "inspect": _h_inspect,
     "stats": _h_stats,
+    "list_commands": _h_list_commands,
     "complete": _h_complete,
     "lint": _h_lint,
     "hover": _h_hover,
