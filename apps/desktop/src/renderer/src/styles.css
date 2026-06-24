@@ -1576,6 +1576,47 @@ button:disabled {
   color: #9cdcfe;
 }
 
+/* terminal (xterm) */
+.terminal-panel {
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: #1e1e1e;
+}
+.terminal-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 12px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-dim);
+}
+.terminal-panel__close {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+.terminal-panel__close:hover {
+  color: var(--fg);
+}
+.terminal-panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 6px;
+  overflow: hidden;
+}
+.sb-term--on {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
 /* status bar / task manager */
 .statusbar {
   display: flex;

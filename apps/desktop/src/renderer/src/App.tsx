@@ -5,6 +5,7 @@ import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
 import { StatusBar } from './components/StatusBar'
+import { TerminalPanel } from './components/TerminalPanel'
 import { DiffView, languageFromPath, type DiffData } from './components/DiffView'
 import { CodeEditor } from './editor/Editor'
 import { parseCells } from './editor/cells'
@@ -87,6 +88,7 @@ export function App(): JSX.Element {
   const [autoSave, setAutoSave] = useState(false)
   const [sidebarView, setSidebarView] = useState<'files' | 'git'>('files')
   const [diffView, setDiffView] = useState<DiffData | null>(null)
+  const [terminalOpen, setTerminalOpen] = useState(false)
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -334,6 +336,18 @@ export function App(): JSX.Element {
   }
   useEffect(() => window.pykortex.onMenu(({ action, payload }) => actionsRef.current[action]?.(payload)), [])
 
+  // Ctrl+` alterna o terminal
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault()
+        setTerminalOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // auto save: salva a aba ativa (se for arquivo e estiver suja) após 800ms ocioso
   useEffect(() => {
     if (!autoSave || !active || !active.path || active.code === active.saved) return
@@ -549,12 +563,16 @@ export function App(): JSX.Element {
         </section>
       </main>
 
+      {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
+
       <StatusBar
         conn={conn}
         kernel={kernel}
         stats={stats}
         execCount={execCount}
         varCount={variables.length}
+        terminalOpen={terminalOpen}
+        onToggleTerminal={() => setTerminalOpen((v) => !v)}
         onInterrupt={interrupt}
         onRestart={restart}
       />

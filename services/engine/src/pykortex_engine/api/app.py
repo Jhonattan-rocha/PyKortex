@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Callable
@@ -17,9 +18,10 @@ from typing import Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from pykortex_engine import __version__, analysis
+from pykortex_engine import __version__, analysis, terminal
 from pykortex_engine.api.files_router import router as files_router
 from pykortex_engine.api.git_router import router as git_router
+from pykortex_engine.files import get_workspace
 from pykortex_engine.kernels import KernelSession, get_session
 
 logger = logging.getLogger("pykortex.engine")
@@ -202,3 +204,56 @@ async def execute_ws(websocket: WebSocket) -> None:
     except Exception:  # noqa: BLE001
         logger.exception("Erro no loop do WebSocket")
         await websocket.close()
+
+
+@app.websocket("/ws/terminal")
+async def terminal_ws(websocket: WebSocket) -> None:
+    """Terminal real (PTY): streama a saída do shell e recebe teclas/resize."""
+    await websocket.accept()
+    root = get_workspace().root
+    cwd = str(root) if root else os.path.expanduser("~")
+
+    try:
+        proc = await asyncio.to_thread(terminal.spawn, cwd, 80, 24)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Falha ao abrir o terminal")
+        await websocket.send_json({"type": "error", "message": str(exc)})
+        await websocket.close()
+        return
+
+    async def reader() -> None:
+        while True:
+            try:
+                data = await asyncio.to_thread(proc.read, 1024)
+            except (EOFError, OSError):
+                break
+            if not data:
+                break
+            await websocket.send_json({"type": "output", "data": terminal.to_text(data)})
+
+    async def writer() -> None:
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "input":
+                await asyncio.to_thread(proc.write, msg.get("data", ""))
+            elif msg.get("type") == "resize":
+                try:
+                    proc.setwinsize(int(msg.get("rows", 24)), int(msg.get("cols", 80)))
+                except Exception:  # noqa: BLE001
+                    pass
+
+    r_task = asyncio.create_task(reader())
+    w_task = asyncio.create_task(writer())
+    try:
+        await asyncio.wait({r_task, w_task}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for t in (r_task, w_task):
+            t.cancel()
+        try:
+            await websocket.send_json({"type": "exit"})
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            proc.terminate(force=True)
+        except Exception:  # noqa: BLE001
+            pass

@@ -8,6 +8,8 @@ export function StatusBar({
   stats,
   execCount,
   varCount,
+  terminalOpen,
+  onToggleTerminal,
   onInterrupt,
   onRestart
 }: {
@@ -16,6 +18,8 @@ export function StatusBar({
   stats: KernelStats | null
   execCount: number
   varCount: number
+  terminalOpen: boolean
+  onToggleTerminal: () => void
   onInterrupt: () => void
   onRestart: () => void
 }): JSX.Element {
@@ -54,6 +58,13 @@ export function StatusBar({
       </span>
 
       <div className="sb-actions">
+        <button
+          className={terminalOpen ? 'sb-term sb-term--on' : 'sb-term'}
+          onClick={onToggleTerminal}
+          title="Terminal (Ctrl+`)"
+        >
+          ⌨ Terminal
+        </button>
         <button onClick={onInterrupt} disabled={!connected || !busy} title="Interromper execução">
           ■ Interromper
         </button>

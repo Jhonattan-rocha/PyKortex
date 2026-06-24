@@ -13,6 +13,9 @@ dependencies = [
     "psutil>=5.9",
     "jedi>=0.19",
     "pyflakes>=3.0",
+    # terminal (PTY): wheel no Windows (ConPTY), ptyprocess no Unix
+    "pywinpty>=2.0; sys_platform == 'win32'",
+    "ptyprocess>=0.7; sys_platform != 'win32'",
 ]
 
 [project.optional-dependencies]
