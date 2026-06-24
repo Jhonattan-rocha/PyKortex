@@ -7,11 +7,15 @@ estado coerente em vez de levantar erro.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from typing import Any
 
 
 def _run(root: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+    # GIT_TERMINAL_PROMPT=0: nunca pede senha interativamente (não trava); a
+    # autenticação fica a cargo do credential helper / SSH agent da máquina.
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     return subprocess.run(
         # core.quotepath=false: caminhos não-ASCII saem em UTF-8 sem aspas/escape
         ["git", "-c", "core.quotepath=false", *args],
@@ -20,6 +24,7 @@ def _run(root: str, args: list[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=env,
     )
 
 
@@ -162,3 +167,48 @@ def reset(root: str, rev: str, mode: str = "mixed") -> dict[str, Any]:
         mode = "mixed"
     r = _run(root, ["reset", f"--{mode}", rev])
     return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}
+
+
+def commit_files(root: str, commit_hash: str) -> dict[str, Any]:
+    """Arquivos alterados num commit (status + caminho)."""
+    r = _run(root, ["show", "--no-color", "--name-status", "--format=", commit_hash])
+    files: list[dict[str, str]] = []
+    for line in r.stdout.splitlines():
+        if "\t" not in line:
+            continue
+        parts = line.split("\t")
+        files.append({"status": parts[0][0], "path": parts[-1]})
+    return {"files": files}
+
+
+def remotes(root: str) -> dict[str, Any]:
+    r = _run(root, ["remote", "-v"])
+    seen: dict[str, str] = {}
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] not in seen:
+            seen[parts[0]] = parts[1]
+    return {"remotes": [{"name": n, "url": u} for n, u in seen.items()]}
+
+
+def add_remote(root: str, name: str, url: str) -> dict[str, Any]:
+    r = _run(root, ["remote", "add", name, url])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}
+
+
+def push(root: str, set_upstream: bool = False, branch: str = "") -> dict[str, Any]:
+    args = ["push"]
+    if set_upstream and branch:
+        args += ["-u", "origin", branch]
+    r = _run(root, args)
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip() or "push ok"}
+
+
+def pull(root: str) -> dict[str, Any]:
+    r = _run(root, ["pull"])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}
+
+
+def fetch(root: str) -> dict[str, Any]:
+    r = _run(root, ["fetch"])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip() or "fetch ok"}

@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  gitAddRemote,
   gitCommit,
+  gitCommitFiles,
   gitDiscard,
+  gitFetch,
   gitInit,
   gitLog,
+  gitPull,
+  gitPush,
+  gitRemotes,
   gitReset,
   gitStage,
   gitStatus,
   gitUnstage,
   type GitCommit,
+  type GitCommitFile,
   type GitFile,
+  type GitRemote,
   type GitStatus
 } from '../engine/gitClient'
 
@@ -22,27 +30,52 @@ const dirname = (p: string): string => {
 /** Painel de Source Control (git): branch, mudanças staged/unstaged/untracked. */
 export function GitPanel({
   root,
-  onOpen
+  onOpen,
+  onShowCommitDiff
 }: {
   root: string | null
   onOpen: (path: string) => void
+  onShowCommitDiff: (hash: string, path: string) => void
 }): JSX.Element {
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [view, setView] = useState<'changes' | 'history'>('changes')
   const [commits, setCommits] = useState<GitCommit[]>([])
+  const [remotes, setRemotes] = useState<GitRemote[]>([])
+  const [remoteUrl, setRemoteUrl] = useState('')
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      const [st, lg] = await Promise.all([gitStatus(), gitLog()])
+      const [st, lg, rm] = await Promise.all([gitStatus(), gitLog(), gitRemotes()])
       setStatus(st)
       setCommits(lg.commits)
+      setRemotes(rm.remotes)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [])
+
+  // operações de rede (push/pull/fetch/add remote): mostram notice/erro
+  const remoteOp = async (
+    fn: () => Promise<{ ok: boolean; message: string }>,
+    okLabel: string
+  ): Promise<void> => {
+    setError(null)
+    setNotice(`${okLabel}…`)
+    try {
+      const r = await fn()
+      setNotice(null)
+      if (!r.ok) setError(r.message || `falha em ${okLabel}`)
+      else setNotice(r.message || `${okLabel} ok`)
+      await load()
+    } catch (e) {
+      setNotice(null)
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -90,6 +123,42 @@ export function GitPanel({
         </button>
       </div>
 
+      {remotes.length > 0 ? (
+        <div className="git-remote-bar">
+          <button
+            onClick={() => void remoteOp(() => gitPush(!status.upstream, status.branch), 'push')}
+          >
+            ⤒ Push
+          </button>
+          <button onClick={() => void remoteOp(gitPull, 'pull')}>⤓ Pull</button>
+          <button onClick={() => void remoteOp(gitFetch, 'fetch')}>⟲ Fetch</button>
+          <span className="git-remote-bar__url" title={remotes[0].url}>
+            {remotes[0].name}
+          </span>
+        </div>
+      ) : (
+        <div className="git-remote-bar">
+          <input
+            className="git-remote-input"
+            placeholder="URL do remote (GitHub…)"
+            value={remoteUrl}
+            onChange={(e) => setRemoteUrl(e.target.value)}
+          />
+          <button
+            disabled={!remoteUrl.trim()}
+            onClick={() =>
+              void remoteOp(() => gitAddRemote(remoteUrl.trim()), 'add remote').then(() =>
+                setRemoteUrl('')
+              )
+            }
+          >
+            + origin
+          </button>
+        </div>
+      )}
+
+      {notice && <div className="git-notice">{notice}</div>}
+
       <div className="git-tabs">
         <button
           className={`git-tab${view === 'changes' ? ' git-tab--active' : ''}`}
@@ -108,7 +177,11 @@ export function GitPanel({
       {error && <div className="git-error">{error}</div>}
 
       {view === 'history' ? (
-        <GitHistory commits={commits} onReset={(rev, mode) => void act(() => gitReset(rev, mode))} />
+        <GitHistory
+          commits={commits}
+          onReset={(rev, mode) => void act(() => gitReset(rev, mode))}
+          onShowCommitDiff={onShowCommitDiff}
+        />
       ) : (
         <>
       <div className="git-commit">
@@ -196,12 +269,22 @@ export function GitPanel({
 
 function GitHistory({
   commits,
-  onReset
+  onReset,
+  onShowCommitDiff
 }: {
   commits: GitCommit[]
   onReset: (rev: string, mode: 'soft' | 'mixed' | 'hard') => void
+  onShowCommitDiff: (hash: string, path: string) => void
 }): JSX.Element {
   const [openHash, setOpenHash] = useState<string | null>(null)
+  const [files, setFiles] = useState<Record<string, GitCommitFile[]>>({})
+
+  const toggle = (hash: string): void => {
+    setOpenHash((h) => (h === hash ? null : hash))
+    if (!files[hash]) {
+      void gitCommitFiles(hash).then((r) => setFiles((m) => ({ ...m, [hash]: r.files })))
+    }
+  }
 
   if (commits.length === 0) {
     return <div className="git--empty">Nenhum commit ainda.</div>
@@ -226,13 +309,28 @@ function GitHistory({
     <div className="git-history">
       {commits.map((c) => (
         <div key={c.hash} className="git-commit-row">
-          <div className="git-commit-row__main" onClick={() => setOpenHash((h) => (h === c.hash ? null : c.hash))}>
+          <div className="git-commit-row__main" onClick={() => toggle(c.hash)}>
             <span className="git-commit-row__hash">{c.short}</span>
             <span className="git-commit-row__subject">{c.subject}</span>
           </div>
           <div className="git-commit-row__meta">
             {c.author} · {c.date}
           </div>
+          {openHash === c.hash && (
+            <div className="git-commit-files">
+              {(files[c.hash] ?? []).map((f) => (
+                <div
+                  key={f.path}
+                  className="git-commit-file"
+                  onClick={() => onShowCommitDiff(c.hash, f.path)}
+                  title={`ver diff de ${f.path}`}
+                >
+                  <span className={`git-st git-st--${f.status}`}>{f.status}</span>
+                  <span className="git-commit-file__path">{f.path}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {openHash === c.hash && (
             <div className="git-reset-bar">
               <span className="git-reset-bar__label">reset:</span>

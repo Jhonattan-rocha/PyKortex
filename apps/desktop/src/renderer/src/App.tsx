@@ -164,6 +164,24 @@ export function App(): JSX.Element {
     setDiffView({ title: path, original, modified, language: languageFromPath(path) })
   }, [])
 
+  // git: diff de um arquivo num commit específico (pai vs commit)
+  const showCommitDiff = useCallback(async (hash: string, path: string) => {
+    const [original, modified] = await Promise.all([
+      gitShow(path, `${hash}^`)
+        .then((r) => r.content)
+        .catch(() => ''),
+      gitShow(path, hash)
+        .then((r) => r.content)
+        .catch(() => '')
+    ])
+    setDiffView({
+      title: `${path} @ ${hash.slice(0, 7)}`,
+      original,
+      modified,
+      language: languageFromPath(path)
+    })
+  }, [])
+
   // go-to-definition cross-file: abre o arquivo (se no workspace) e posiciona
   const onOpenDefinition = useCallback(
     async (absPath: string, line: number, col: number) => {
@@ -439,7 +457,7 @@ export function App(): JSX.Element {
                 />
               </>
             ) : (
-              <GitPanel root={workspaceRoot} onOpen={showDiff} />
+              <GitPanel root={workspaceRoot} onOpen={showDiff} onShowCommitDiff={showCommitDiff} />
             )}
           </div>
           <div className="sidebar-section sidebar-section--vars">

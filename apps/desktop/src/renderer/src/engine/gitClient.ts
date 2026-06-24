@@ -61,3 +61,21 @@ export const gitLog = (limit = 50): Promise<{ commits: GitCommit[] }> =>
   getJson(`/git/log?limit=${limit}`)
 export const gitReset = (rev: string, mode: 'soft' | 'mixed' | 'hard'): Promise<GitResult> =>
   postJson('/git/reset', { rev, mode })
+
+export interface GitCommitFile {
+  status: string
+  path: string
+}
+export interface GitRemote {
+  name: string
+  url: string
+}
+export const gitCommitFiles = (hash: string): Promise<{ files: GitCommitFile[] }> =>
+  getJson(`/git/commit-files?hash=${encodeURIComponent(hash)}`)
+export const gitRemotes = (): Promise<{ remotes: GitRemote[] }> => getJson('/git/remotes')
+export const gitAddRemote = (url: string, name = 'origin'): Promise<GitResult> =>
+  postJson('/git/remote', { url, name })
+export const gitPush = (setUpstream = false, branch = ''): Promise<GitResult> =>
+  postJson(`/git/push?set_upstream=${setUpstream}&branch=${encodeURIComponent(branch)}`, {})
+export const gitPull = (): Promise<GitResult> => postJson('/git/pull', {})
+export const gitFetch = (): Promise<GitResult> => postJson('/git/fetch', {})

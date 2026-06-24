@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -22,6 +24,11 @@ class CommitBody(BaseModel):
 class ResetBody(BaseModel):
     rev: str
     mode: str = "mixed"
+
+
+class RemoteBody(BaseModel):
+    name: str = "origin"
+    url: str
 
 
 def _root() -> str | None:
@@ -95,3 +102,45 @@ async def git_log(limit: int = 50) -> dict:
 async def git_reset(body: ResetBody) -> dict:
     root = _root()
     return git.reset(root, body.rev, body.mode) if root else {"ok": False, "message": "sem workspace"}
+
+
+@router.get("/commit-files")
+async def git_commit_files(hash: str) -> dict:
+    root = _root()
+    return git.commit_files(root, hash) if root else {"files": []}
+
+
+@router.get("/remotes")
+async def git_remotes() -> dict:
+    root = _root()
+    return git.remotes(root) if root else {"remotes": []}
+
+
+@router.post("/remote")
+async def git_add_remote(body: RemoteBody) -> dict:
+    root = _root()
+    return git.add_remote(root, body.name, body.url) if root else {"ok": False, "message": "sem workspace"}
+
+
+@router.post("/push")
+async def git_push(set_upstream: bool = False, branch: str = "") -> dict:
+    root = _root()
+    if root is None:
+        return {"ok": False, "message": "sem workspace"}
+    return await asyncio.to_thread(git.push, root, set_upstream, branch)
+
+
+@router.post("/pull")
+async def git_pull() -> dict:
+    root = _root()
+    if root is None:
+        return {"ok": False, "message": "sem workspace"}
+    return await asyncio.to_thread(git.pull, root)
+
+
+@router.post("/fetch")
+async def git_fetch() -> dict:
+    root = _root()
+    if root is None:
+        return {"ok": False, "message": "sem workspace"}
+    return await asyncio.to_thread(git.fetch, root)

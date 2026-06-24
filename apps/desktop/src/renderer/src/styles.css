@@ -408,6 +408,78 @@ button:disabled {
 .git-refresh:hover {
   color: var(--accent);
 }
+.git-remote-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.git-remote-bar button {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg);
+  font-size: 11px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.git-remote-bar button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.git-remote-bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.git-remote-bar__url {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--fg-dim);
+}
+.git-remote-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  outline: none;
+}
+.git-remote-input:focus {
+  border-color: var(--accent);
+}
+.git-notice {
+  padding: 5px 10px;
+  color: #4ade80;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.git-commit-files {
+  margin: 4px 0;
+  border-left: 2px solid var(--border);
+  padding-left: 6px;
+}
+.git-commit-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.git-commit-file:hover {
+  color: var(--accent);
+}
+.git-commit-file__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .git-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
