@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pykortex_engine import __version__, analysis
 from pykortex_engine.api.files_router import router as files_router
+from pykortex_engine.api.git_router import router as git_router
 from pykortex_engine.kernels import KernelSession, get_session
 
 logger = logging.getLogger("pykortex.engine")
@@ -43,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(files_router)
+app.include_router(git_router)
 
 
 @app.get("/health")

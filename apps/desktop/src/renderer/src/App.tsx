@@ -3,6 +3,7 @@ import { useEngine } from './engine/useEngine'
 import { ConsoleView } from './components/ConsoleView'
 import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
+import { GitPanel } from './components/GitPanel'
 import { StatusBar } from './components/StatusBar'
 import { CodeEditor } from './editor/Editor'
 import { parseCells } from './editor/cells'
@@ -82,6 +83,7 @@ export function App(): JSX.Element {
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null)
   const [fsError, setFsError] = useState<string | null>(null)
   const [autoSave, setAutoSave] = useState(false)
+  const [sidebarView, setSidebarView] = useState<'files' | 'git'>('files')
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -389,23 +391,42 @@ export function App(): JSX.Element {
         <aside className="pane pane--sidebar">
           <div className="sidebar-section sidebar-section--files">
             <div className="pane__head">
-              <span>Explorer</span>
+              <div className="sidebar-tabs">
+                <button
+                  className={`sidebar-tab${sidebarView === 'files' ? ' sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarView('files')}
+                >
+                  Arquivos
+                </button>
+                <button
+                  className={`sidebar-tab${sidebarView === 'git' ? ' sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarView('git')}
+                >
+                  Git
+                </button>
+              </div>
               <div className="actions">
                 <button onClick={openFolder}>Abrir pasta…</button>
               </div>
             </div>
-            {workspaceRoot && (
-              <div className="ws-root" title={workspaceRoot}>
-                {workspaceRoot}
-              </div>
+            {sidebarView === 'files' ? (
+              <>
+                {workspaceRoot && (
+                  <div className="ws-root" title={workspaceRoot}>
+                    {workspaceRoot}
+                  </div>
+                )}
+                <FileTree
+                  ref={fileTreeRef}
+                  root={workspaceRoot}
+                  activePath={active?.path ?? null}
+                  onOpen={openFile}
+                  onPathChanged={onPathChanged}
+                />
+              </>
+            ) : (
+              <GitPanel root={workspaceRoot} onOpen={openFile} />
             )}
-            <FileTree
-              ref={fileTreeRef}
-              root={workspaceRoot}
-              activePath={active?.path ?? null}
-              onOpen={openFile}
-              onPathChanged={onPathChanged}
-            />
           </div>
           <div className="sidebar-section sidebar-section--vars">
             <VariableExplorer

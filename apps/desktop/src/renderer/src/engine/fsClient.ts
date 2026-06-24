@@ -11,7 +11,7 @@ export interface FsEntry {
 
 let basePromise: Promise<string> | null = null
 
-async function baseUrl(): Promise<string> {
+export async function baseUrl(): Promise<string> {
   if (!basePromise) {
     basePromise = window.pykortex.getEngineInfo().then((info) => {
       if (!info.ok) throw new Error(info.error)
