@@ -212,3 +212,33 @@ def pull(root: str) -> dict[str, Any]:
 def fetch(root: str) -> dict[str, Any]:
     r = _run(root, ["fetch"])
     return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip() or "fetch ok"}
+
+
+def branches(root: str) -> dict[str, Any]:
+    if not is_repo(root):
+        return {"branches": [], "current": ""}
+    r = _run(root, ["branch", "--no-color"])
+    names: list[str] = []
+    current = ""
+    for line in r.stdout.splitlines():
+        if not line.strip():
+            continue
+        is_current = line.startswith("* ")
+        name = line[2:].strip()
+        if name.startswith("("):  # "(HEAD detached at ...)" — ignora
+            continue
+        names.append(name)
+        if is_current:
+            current = name
+    return {"branches": names, "current": current}
+
+
+def checkout(root: str, branch: str) -> dict[str, Any]:
+    r = _run(root, ["checkout", branch])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}
+
+
+def create_branch(root: str, name: str) -> dict[str, Any]:
+    """Cria e já troca para a branch (checkout -b)."""
+    r = _run(root, ["checkout", "-b", name])
+    return {"ok": r.returncode == 0, "message": (r.stdout or r.stderr).strip()}

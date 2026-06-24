@@ -79,3 +79,7 @@ export const gitPush = (setUpstream = false, branch = ''): Promise<GitResult> =>
   postJson(`/git/push?set_upstream=${setUpstream}&branch=${encodeURIComponent(branch)}`, {})
 export const gitPull = (): Promise<GitResult> => postJson('/git/pull', {})
 export const gitFetch = (): Promise<GitResult> => postJson('/git/fetch', {})
+export const gitBranches = (): Promise<{ branches: string[]; current: string }> =>
+  getJson('/git/branches')
+export const gitCheckout = (name: string): Promise<GitResult> => postJson('/git/checkout', { name })
+export const gitCreateBranch = (name: string): Promise<GitResult> => postJson('/git/branch', { name })

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   gitAddRemote,
+  gitBranches,
+  gitCheckout,
   gitCommit,
   gitCommitFiles,
+  gitCreateBranch,
   gitDiscard,
   gitFetch,
   gitInit,
@@ -45,14 +48,23 @@ export function GitPanel({
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [remotes, setRemotes] = useState<GitRemote[]>([])
   const [remoteUrl, setRemoteUrl] = useState('')
+  const [branches, setBranches] = useState<string[]>([])
+  const [branchMenu, setBranchMenu] = useState(false)
+  const [newBranch, setNewBranch] = useState('')
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      const [st, lg, rm] = await Promise.all([gitStatus(), gitLog(), gitRemotes()])
+      const [st, lg, rm, br] = await Promise.all([
+        gitStatus(),
+        gitLog(),
+        gitRemotes(),
+        gitBranches()
+      ])
       setStatus(st)
       setCommits(lg.commits)
       setRemotes(rm.remotes)
+      setBranches(br.branches)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -115,12 +127,61 @@ export function GitPanel({
   return (
     <div className="git">
       <div className="git-branch">
-        <span className="git-branch__name">⎇ {status.branch || '—'}</span>
+        <button
+          className="git-branch__btn"
+          title="Trocar / criar branch"
+          onClick={() => setBranchMenu((v) => !v)}
+        >
+          ⎇ {status.branch || '—'} ▾
+        </button>
         {status.ahead > 0 && <span className="git-track">↑{status.ahead}</span>}
         {status.behind > 0 && <span className="git-track">↓{status.behind}</span>}
         <button className="git-refresh" title="Atualizar" onClick={() => void load()}>
           ⟳
         </button>
+
+        {branchMenu && (
+          <>
+            <div className="git-branch-backdrop" onClick={() => setBranchMenu(false)} />
+            <div className="git-branch-menu">
+              {branches.map((b) => (
+                <button
+                  key={b}
+                  className={`git-branch-item${b === status.branch ? ' git-branch-item--active' : ''}`}
+                  onClick={() => {
+                    setBranchMenu(false)
+                    if (b !== status.branch) void act(() => gitCheckout(b))
+                  }}
+                >
+                  {b === status.branch ? '● ' : '  '}
+                  {b}
+                </button>
+              ))}
+              <div className="git-branch-new">
+                <input
+                  placeholder="nova branch"
+                  value={newBranch}
+                  onChange={(e) => setNewBranch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newBranch.trim()) {
+                      setBranchMenu(false)
+                      void act(() => gitCreateBranch(newBranch.trim())).then(() => setNewBranch(''))
+                    }
+                  }}
+                />
+                <button
+                  disabled={!newBranch.trim()}
+                  onClick={() => {
+                    setBranchMenu(false)
+                    void act(() => gitCreateBranch(newBranch.trim())).then(() => setNewBranch(''))
+                  }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {remotes.length > 0 ? (

@@ -31,6 +31,10 @@ class RemoteBody(BaseModel):
     url: str
 
 
+class BranchBody(BaseModel):
+    name: str
+
+
 def _root() -> str | None:
     root = get_workspace().root
     return str(root) if root else None
@@ -144,3 +148,21 @@ async def git_fetch() -> dict:
     if root is None:
         return {"ok": False, "message": "sem workspace"}
     return await asyncio.to_thread(git.fetch, root)
+
+
+@router.get("/branches")
+async def git_branches() -> dict:
+    root = _root()
+    return git.branches(root) if root else {"branches": [], "current": ""}
+
+
+@router.post("/checkout")
+async def git_checkout(body: BranchBody) -> dict:
+    root = _root()
+    return git.checkout(root, body.name) if root else {"ok": False, "message": "sem workspace"}
+
+
+@router.post("/branch")
+async def git_create_branch(body: BranchBody) -> dict:
+    root = _root()
+    return git.create_branch(root, body.name) if root else {"ok": False, "message": "sem workspace"}
