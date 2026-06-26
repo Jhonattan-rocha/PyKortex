@@ -2011,6 +2011,113 @@ button:disabled {
   font-size: 11px;
   padding: 1px 8px;
 }
+.sb-tasks {
+  position: relative;
+}
+.sb-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+.sb-tasks__menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 360px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.sb-tasks__item {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  gap: 1px;
+  padding: 6px 10px !important;
+  text-align: left;
+}
+.sb-tasks__item:hover {
+  background: var(--accent);
+}
+.sb-tasks__name {
+  font-size: 12px;
+  color: var(--fg);
+}
+.sb-tasks__cmd {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.sb-tasks__item:hover .sb-tasks__name,
+.sb-tasks__item:hover .sb-tasks__cmd {
+  color: #fff;
+}
+
+/* projetos recentes (estado vazio da aba Arquivos) */
+.recents {
+  padding: 8px;
+}
+.recents__title {
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.recents__item {
+  display: flex;
+  align-items: center;
+}
+.recents__open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.recents__open:hover {
+  background: var(--bg-3);
+}
+.recents__name {
+  font-size: 13px;
+}
+.recents__path {
+  font-size: 10px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  direction: rtl;
+  text-align: left;
+}
+.recents__remove {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px 6px;
+}
+.recents__item:hover .recents__remove {
+  opacity: 1;
+}
 
 .banner {
   padding: 8px 12px;

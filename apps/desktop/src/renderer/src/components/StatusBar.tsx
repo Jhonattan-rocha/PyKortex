@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { ConnState } from '../engine/useEngine'
 import type { KernelState, KernelStats } from '../engine/protocol'
+import type { PkTask } from '../engine/tasks'
 
 /** Barra de status / task manager: estado do kernel + recursos + ações. */
 export function StatusBar({
@@ -9,6 +11,8 @@ export function StatusBar({
   execCount,
   varCount,
   terminalOpen,
+  tasks,
+  onRunTask,
   onToggleTerminal,
   onInterrupt,
   onRestart
@@ -19,6 +23,8 @@ export function StatusBar({
   execCount: number
   varCount: number
   terminalOpen: boolean
+  tasks: PkTask[]
+  onRunTask: (command: string) => void
   onToggleTerminal: () => void
   onInterrupt: () => void
   onRestart: () => void
@@ -26,6 +32,7 @@ export function StatusBar({
   const connected = conn === 'open'
   const busy = kernel === 'busy'
   const label = !connected ? conn : busy ? 'ocupado' : 'ocioso'
+  const [tasksOpen, setTasksOpen] = useState(false)
 
   return (
     <footer className="statusbar">
@@ -58,6 +65,34 @@ export function StatusBar({
       </span>
 
       <div className="sb-actions">
+        {tasks.length > 0 && (
+          <div className="sb-tasks">
+            <button onClick={() => setTasksOpen((v) => !v)} title="Tarefas do projeto">
+              ▷ Tarefas
+            </button>
+            {tasksOpen && (
+              <>
+                <div className="sb-backdrop" onClick={() => setTasksOpen(false)} />
+                <div className="sb-tasks__menu">
+                  {tasks.map((t) => (
+                    <button
+                      key={t.name}
+                      className="sb-tasks__item"
+                      title={t.command}
+                      onClick={() => {
+                        onRunTask(t.command)
+                        setTasksOpen(false)
+                      }}
+                    >
+                      <span className="sb-tasks__name">{t.name}</span>
+                      <span className="sb-tasks__cmd">{t.command}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <button
           className={terminalOpen ? 'sb-term sb-term--on' : 'sb-term'}
           onClick={onToggleTerminal}

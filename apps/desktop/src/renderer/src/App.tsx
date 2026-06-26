@@ -15,6 +15,8 @@ import { parseCells } from './editor/cells'
 import { readFile, setWorkspace, writeFile } from './engine/fsClient'
 import { gitShow } from './engine/gitClient'
 import { loadState, saveState } from './engine/persistence'
+import { addRecent, loadRecents, removeRecent } from './engine/recents'
+import { loadTasks, type PkTask } from './engine/tasks'
 
 const SAMPLE = `# %% imports
 import sys
@@ -117,6 +119,10 @@ export function App(): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const extLoaded = useRef<Set<string>>(new Set())
   const extDismissed = useRef<Set<string>>(new Set())
+  const [recents, setRecents] = useState<string[]>(() => loadRecents())
+  const [tasks, setTasks] = useState<PkTask[]>([])
+  const [terminalCommand, setTerminalCommand] = useState<{ text: string; nonce: number }>()
+  const terminalCmdNonce = useRef(0)
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -161,6 +167,37 @@ export function App(): JSX.Element {
       setFsError(e instanceof Error ? e.message : String(e))
     }
   }, [])
+
+  // abre um workspace por caminho (projetos recentes)
+  const openWorkspacePath = useCallback(async (path: string) => {
+    setFsError(null)
+    try {
+      setWorkspaceRoot(await setWorkspace(path))
+    } catch (e) {
+      setFsError(e instanceof Error ? e.message : String(e))
+      setRecents(removeRecent(path)) // pasta sumiu → tira dos recentes
+    }
+  }, [])
+
+  // roda uma tarefa do projeto: abre o terminal e injeta o comando no PTY
+  const runTask = useCallback((command: string) => {
+    setTerminalOpen(true)
+    setTerminalCommand({ text: command, nonce: ++terminalCmdNonce.current })
+  }, [])
+
+  // registra o workspace nos recentes sempre que ele muda
+  useEffect(() => {
+    if (workspaceRoot) setRecents(addRecent(workspaceRoot))
+  }, [workspaceRoot])
+
+  // carrega as tarefas (.pykortex/tasks.json) do workspace atual
+  useEffect(() => {
+    if (!workspaceRoot) {
+      setTasks([])
+      return
+    }
+    void loadTasks().then(setTasks)
+  }, [workspaceRoot])
 
   const openFile = useCallback(
     async (rel: string) => {
@@ -554,6 +591,30 @@ export function App(): JSX.Element {
                     {workspaceRoot}
                   </div>
                 )}
+                {!workspaceRoot && recents.length > 0 && (
+                  <div className="recents">
+                    <div className="recents__title">Projetos recentes</div>
+                    {recents.map((p) => (
+                      <div key={p} className="recents__item">
+                        <button
+                          className="recents__open"
+                          title={p}
+                          onClick={() => void openWorkspacePath(p)}
+                        >
+                          <span className="recents__name">{basename(p)}</span>
+                          <span className="recents__path">{p}</span>
+                        </button>
+                        <button
+                          className="recents__remove"
+                          title="Remover dos recentes"
+                          onClick={() => setRecents(removeRecent(p))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <FileTree
                   ref={fileTreeRef}
                   root={workspaceRoot}
@@ -664,7 +725,9 @@ export function App(): JSX.Element {
         </section>
       </main>
 
-      {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
+      {terminalOpen && (
+        <TerminalPanel onClose={() => setTerminalOpen(false)} command={terminalCommand} />
+      )}
 
       <StatusBar
         conn={conn}
@@ -673,6 +736,8 @@ export function App(): JSX.Element {
         execCount={execCount}
         varCount={variables.length}
         terminalOpen={terminalOpen}
+        tasks={tasks}
+        onRunTask={runTask}
         onToggleTerminal={() => setTerminalOpen((v) => !v)}
         onInterrupt={interrupt}
         onRestart={restart}
