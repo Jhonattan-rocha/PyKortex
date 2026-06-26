@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -83,3 +85,11 @@ async def rename(body: RenameBody) -> dict:
 @router.post("/delete")
 async def delete(body: DeleteBody) -> dict:
     return _guard(lambda: get_workspace().delete(body.path))
+
+
+@router.get("/search")
+async def search(q: str, case: int = 0, regex: int = 0) -> dict:
+    ws = get_workspace()
+    return await asyncio.to_thread(
+        lambda: _guard(lambda: ws.search(q, case_sensitive=bool(case), is_regex=bool(regex)))
+    )

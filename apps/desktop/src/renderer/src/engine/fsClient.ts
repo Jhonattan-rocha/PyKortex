@@ -9,6 +9,20 @@ export interface FsEntry {
   type: 'dir' | 'file'
 }
 
+export interface SearchMatch {
+  line: number
+  col: number
+  text: string
+}
+export interface SearchFileResult {
+  path: string
+  matches: SearchMatch[]
+}
+export interface SearchResponse {
+  results: SearchFileResult[]
+  truncated: boolean
+}
+
 let basePromise: Promise<string> | null = null
 
 export async function baseUrl(): Promise<string> {
@@ -95,4 +109,17 @@ export async function renameEntry(path: string, to: string): Promise<void> {
 
 export async function deleteEntry(path: string): Promise<void> {
   await post('/fs/delete', { path })
+}
+
+export async function searchWorkspace(
+  q: string,
+  opts: { case?: boolean; regex?: boolean } = {}
+): Promise<SearchResponse> {
+  const base = await baseUrl()
+  const params = new URLSearchParams({
+    q,
+    case: opts.case ? '1' : '0',
+    regex: opts.regex ? '1' : '0'
+  })
+  return (await unwrap(await fetch(`${base}/fs/search?${params.toString()}`))) as SearchResponse
 }

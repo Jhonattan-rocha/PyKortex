@@ -5,6 +5,7 @@ import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
 import { PanelsView } from './components/PanelsView'
+import { SearchPanel } from './components/SearchPanel'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -110,7 +111,7 @@ export function App(): JSX.Element {
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null)
   const [fsError, setFsError] = useState<string | null>(null)
   const [autoSave, setAutoSave] = useState(false)
-  const [sidebarView, setSidebarView] = useState<'files' | 'git' | 'panels'>('files')
+  const [sidebarView, setSidebarView] = useState<'files' | 'git' | 'panels' | 'search'>('files')
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -256,6 +257,15 @@ export function App(): JSX.Element {
     [workspaceRoot, openFile]
   )
 
+  // abre um arquivo (caminho RELATIVO) numa linha — usado pela busca global
+  const openAtLine = useCallback(
+    async (rel: string, line: number, col: number) => {
+      await openFile(rel)
+      setReveal({ line, col, nonce: ++revealNonce.current })
+    },
+    [openFile]
+  )
+
   const openFileFromDialog = useCallback(async () => {
     setFsError(null)
     try {
@@ -399,6 +409,9 @@ export function App(): JSX.Element {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault()
         setPaletteOpen(true)
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setSidebarView('search')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -518,6 +531,12 @@ export function App(): JSX.Element {
                   Git
                 </button>
                 <button
+                  className={`sidebar-tab${sidebarView === 'search' ? ' sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarView('search')}
+                >
+                  Buscar
+                </button>
+                <button
                   className={`sidebar-tab${sidebarView === 'panels' ? ' sidebar-tab--active' : ''}`}
                   onClick={() => setSidebarView('panels')}
                 >
@@ -545,6 +564,8 @@ export function App(): JSX.Element {
               </>
             ) : sidebarView === 'git' ? (
               <GitPanel root={workspaceRoot} onOpen={showDiff} onShowCommitDiff={showCommitDiff} />
+            ) : sidebarView === 'search' ? (
+              <SearchPanel onOpen={openAtLine} />
             ) : (
               <PanelsView
                 listPanels={listPanels}

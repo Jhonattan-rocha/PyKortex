@@ -7,11 +7,23 @@ Isso mantém o engine seguro mesmo que a UI mande um caminho inesperado.
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
 # Diretórios ruidosos que não interessam na árvore de arquivos.
 IGNORED = {".git", "__pycache__", ".venv", "node_modules", ".idea", ".vscode", ".ruff_cache"}
+# Extensões claramente binárias — puladas na busca por conteúdo.
+BINARY_EXT = {
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svg",
+    ".pdf", ".zip", ".gz", ".tar", ".7z", ".rar", ".jar", ".whl",
+    ".pyc", ".pyo", ".so", ".dll", ".dylib", ".exe", ".bin", ".o", ".a",
+    ".woff", ".woff2", ".ttf", ".eot", ".mp3", ".mp4", ".mov", ".avi",
+    ".sqlite", ".db", ".parquet", ".feather", ".npy", ".npz", ".pkl",
+}
+# Limites de segurança/performance da busca.
+SEARCH_MAX_FILE_BYTES = 2_000_000
+SEARCH_MAX_RESULTS = 1000
 
 
 class WorkspaceError(Exception):
@@ -113,6 +125,77 @@ class WorkspaceManager:
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.rename(dst)
         return {"path": to}
+
+    def search(
+        self,
+        query: str,
+        case_sensitive: bool = False,
+        is_regex: bool = False,
+        max_results: int = SEARCH_MAX_RESULTS,
+    ) -> dict:
+        """Busca texto em todos os arquivos do workspace.
+
+        Retorna ``{"results": [{"path", "matches": [{"line", "col", "text"}]}],
+        "truncated": bool}``. Puro-Python (multiplataforma, sem depender de
+        ripgrep). Pula diretórios IGNORED, binários e arquivos grandes.
+        """
+        root = self._require_root()
+        if not query:
+            return {"results": [], "truncated": False}
+
+        flags = 0 if case_sensitive else re.IGNORECASE
+        try:
+            pattern = re.compile(query if is_regex else re.escape(query), flags)
+        except re.error as exc:
+            raise WorkspaceError(f"regex inválido: {exc}") from exc
+
+        results: list[dict] = []
+        total = 0
+        truncated = False
+
+        for path in self._walk_files(root):
+            if path.suffix.lower() in BINARY_EXT:
+                continue
+            try:
+                if path.stat().st_size > SEARCH_MAX_FILE_BYTES:
+                    continue
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue  # ilegível ou binário disfarçado
+
+            matches: list[dict] = []
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                m = pattern.search(line)
+                if m is None:
+                    continue
+                matches.append({"line": lineno, "col": m.start() + 1, "text": line[:400]})
+                total += 1
+                if total >= max_results:
+                    truncated = True
+                    break
+            if matches:
+                results.append({"path": path.relative_to(root).as_posix(), "matches": matches})
+            if truncated:
+                break
+
+        return {"results": results, "truncated": truncated}
+
+    def _walk_files(self, root: Path):
+        """Itera arquivos do workspace pulando diretórios IGNORED (multiplataforma)."""
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                children = list(current.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                if child.name in IGNORED:
+                    continue
+                if child.is_dir():
+                    stack.append(child)
+                elif child.is_file():
+                    yield child
 
     def delete(self, rel: str) -> dict:
         """Apaga um arquivo ou diretório (recursivo)."""
