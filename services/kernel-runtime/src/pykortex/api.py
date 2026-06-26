@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from pykortex.registry import REGISTRY, CommandFn, ViewerFn
@@ -27,14 +27,25 @@ def viewer(typ: type) -> Callable[[ViewerFn], ViewerFn]:
     return deco
 
 
-def command(name: str) -> Callable[[CommandFn], CommandFn]:
-    """Registra um comando invocável pela IDE (paleta/menu).
+def command(name: str, inputs: Any = None) -> Callable[[CommandFn], CommandFn]:
+    """Registra um comando invocável pela paleta/menu.
 
-    Wiring com a UI vem numa fase seguinte; por ora fica no registry.
+    ``inputs`` (opcional) descreve valores que a IDE coleta ANTES de rodar e
+    entrega em ``ctx.arg(nome)``. Pode ser uma lista estática ou uma função
+    ``callable(ctx) -> lista`` (resolvida no kernel, p/ opções dinâmicas)::
+
+        @pk.command("Mostrar coluna",
+                    inputs=lambda ctx: [{"name": "col", "type": "pick",
+                                         "label": "Qual coluna?",
+                                         "options": list(ctx.get_var("df").columns)}])
+        def _(ctx):
+            pk.show(ctx.get_var("df")[[ctx.arg("col")]])
+
+    Cada input: ``{"name", "label"?, "type": "text"|"pick", "options"?, "default"?}``.
     """
 
     def deco(fn: CommandFn) -> CommandFn:
-        REGISTRY.add_command(name, fn)
+        REGISTRY.add_command(name, fn, inputs)
         return fn
 
     return deco
@@ -70,6 +81,12 @@ def show(obj: Any) -> None:
 @dataclass
 class Context:
     """Contexto passado a comandos: ponte para o namespace do kernel."""
+
+    args: dict[str, Any] = field(default_factory=dict)
+
+    def arg(self, name: str, default: Any = None) -> Any:
+        """Valor de input coletado pela IDE antes de rodar o comando."""
+        return self.args.get(name, default)
 
     def get_var(self, name: str) -> Any:
         ip = _ipython()

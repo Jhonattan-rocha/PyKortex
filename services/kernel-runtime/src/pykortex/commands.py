@@ -20,13 +20,28 @@ def list_commands_json() -> str:
         return "[]"
 
 
-def run_command(name: str) -> None:
-    """Executa um comando registrado, passando um Context fresco."""
+def command_inputs_json(name: str) -> str:
+    """Resolve os inputs de um comando (estáticos ou via callable) p/ a IDE."""
+    inputs = REGISTRY.command_inputs.get(name)
+    try:
+        if callable(inputs):
+            inputs = inputs(Context())
+        return json.dumps(inputs or [])
+    except Exception:  # noqa: BLE001
+        return "[]"
+
+
+def run_command(name: str, args_json: str = "{}") -> None:
+    """Executa um comando registrado, passando um Context com os args coletados."""
     fn = REGISTRY.commands.get(name)
     if fn is None:
         print(f"[pykortex] comando não encontrado: {name!r}")
         return
-    fn(Context())
+    try:
+        args = json.loads(args_json) if args_json else {}
+    except Exception:  # noqa: BLE001
+        args = {}
+    fn(Context(args if isinstance(args, dict) else {}))
 
 
 def list_panels_json() -> str:

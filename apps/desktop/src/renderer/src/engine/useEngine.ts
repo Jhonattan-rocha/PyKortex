@@ -12,6 +12,7 @@ import type {
   KernelStats,
   OutputMessage,
   PkCommand,
+  PkCommandInput,
   PkPanel,
   ServerMessage,
   SignatureInfo,
@@ -49,7 +50,8 @@ export interface UseEngine {
   signatures: (code: string, line: number, col: number) => Promise<SignatureInfo[]>
   goto: (code: string, line: number, col: number) => Promise<GotoDef[]>
   listCommands: () => Promise<PkCommand[]>
-  runCommand: (name: string) => void
+  commandInputs: (name: string) => Promise<PkCommandInput[]>
+  runCommand: (name: string, args?: Record<string, unknown>) => void
   listPanels: () => Promise<PkPanel[]>
   renderPanel: (name: string) => Promise<{ html: string }>
   kernelEpoch: number
@@ -182,6 +184,10 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'commands_reply') {
         resolveRequest(msg.reqId, msg.commands ?? [])
+        return
+      }
+      if (msg.type === 'command_inputs_reply') {
+        resolveRequest(msg.reqId, msg.inputs ?? [])
         return
       }
       if (msg.type === 'panels_reply') {
@@ -412,8 +418,22 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const commandInputs = useCallback(
+    (name: string): Promise<PkCommandInput[]> =>
+      sendRequest<PkCommandInput[]>(
+        { type: 'command_inputs', name },
+        { unavailable: [], onTimeout: [], timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
   const runCommand = useCallback(
-    (name: string) => execute(`__import__("pykortex")._run_command(${JSON.stringify(name)})`),
+    (name: string, args: Record<string, unknown> = {}) =>
+      execute(
+        `__import__("pykortex")._run_command(${JSON.stringify(name)}, ${JSON.stringify(
+          JSON.stringify(args)
+        )})`
+      ),
     [execute]
   )
 
@@ -456,6 +476,7 @@ export function useEngine(): UseEngine {
     signatures,
     goto,
     listCommands,
+    commandInputs,
     runCommand,
     listPanels,
     renderPanel,

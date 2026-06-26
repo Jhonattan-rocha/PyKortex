@@ -90,6 +90,14 @@ async def _h_list_commands(session: KernelSession, msg: dict) -> AsyncIterator[d
     }
 
 
+async def _h_command_inputs(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    yield {
+        "type": "command_inputs_reply",
+        "reqId": msg.get("reqId"),
+        "inputs": await session.command_inputs(msg.get("name", "")),
+    }
+
+
 async def _h_list_panels(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "panels_reply", "reqId": msg.get("reqId"), "panels": await session.list_panels()}
 
@@ -180,6 +188,7 @@ HANDLERS: dict[str, Handler] = {
     "inspect": _h_inspect,
     "stats": _h_stats,
     "list_commands": _h_list_commands,
+    "command_inputs": _h_command_inputs,
     "list_panels": _h_list_panels,
     "render_panel": _h_render_panel,
     "complete": _h_complete,

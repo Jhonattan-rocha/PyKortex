@@ -111,6 +111,18 @@ export interface PkCommand {
   name: string
 }
 export type CommandsReplyMsg = { type: 'commands_reply'; reqId: number; commands: PkCommand[] }
+export interface PkCommandInput {
+  name: string
+  label?: string
+  type?: 'text' | 'pick'
+  options?: string[]
+  default?: string
+}
+export type CommandInputsReplyMsg = {
+  type: 'command_inputs_reply'
+  reqId: number
+  inputs: PkCommandInput[]
+}
 export interface PkPanel {
   name: string
 }
@@ -155,6 +167,7 @@ export type ServerMessage =
   | ApiResponseMsg
   | CompleteReplyMsg
   | CommandsReplyMsg
+  | CommandInputsReplyMsg
   | PanelsReplyMsg
   | PanelReplyMsg
   | LintReplyMsg

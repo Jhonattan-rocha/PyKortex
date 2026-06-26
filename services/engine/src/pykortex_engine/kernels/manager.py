@@ -313,6 +313,12 @@ class KernelSession:
         data = await self._eval_expr('__import__("pykortex")._list_commands_json()')
         return data if isinstance(data, list) else []
 
+    async def command_inputs(self, name: str) -> list[dict[str, Any]]:
+        """Resolve os inputs de um comando (out-of-band, antes de rodá-lo)."""
+        expr = f'__import__("pykortex")._command_inputs_json({name!r})'
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, list) else []
+
     async def list_panels(self) -> list[dict[str, Any]]:
         """Lista os painéis `@pk.panel` registrados (out-of-band)."""
         data = await self._eval_expr('__import__("pykortex")._list_panels_json()')

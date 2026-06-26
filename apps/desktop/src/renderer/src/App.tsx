@@ -96,6 +96,7 @@ export function App(): JSX.Element {
     signatures,
     goto,
     listCommands,
+    commandInputs,
     runCommand,
     listPanels,
     renderPanel,
@@ -659,6 +660,7 @@ export function App(): JSX.Element {
       {paletteOpen && (
         <CommandPalette
           listCommands={listCommands}
+          commandInputs={commandInputs}
           onRun={runCommand}
           onClose={() => setPaletteOpen(false)}
         />

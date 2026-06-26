@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PkCommand } from '../engine/protocol'
+import type { PkCommand, PkCommandInput } from '../engine/protocol'
 
-/** Paleta de comandos (Ctrl+Shift+P): lista e roda os @pk.command registrados. */
+/** Paleta de comandos (Ctrl+Shift+P): lista, coleta inputs e roda @pk.command. */
 export function CommandPalette({
   listCommands,
+  commandInputs,
   onRun,
   onClose
 }: {
   listCommands: () => Promise<PkCommand[]>
-  onRun: (name: string) => void
+  commandInputs: (name: string) => Promise<PkCommandInput[]>
+  onRun: (name: string, args: Record<string, unknown>) => void
   onClose: () => void
 }): JSX.Element {
   const [commands, setCommands] = useState<PkCommand[]>([])
   const [filter, setFilter] = useState('')
   const [active, setActive] = useState(0)
+  // null = modo lista; preenchido = modo form (coletando inputs do comando)
+  const [form, setForm] = useState<{ name: string; inputs: PkCommandInput[] } | null>(null)
+  const [values, setValues] = useState<Record<string, string>>({})
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -24,9 +29,72 @@ export function CommandPalette({
   const filtered = commands.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()))
   const clamped = Math.min(active, Math.max(0, filtered.length - 1))
 
-  const run = (name: string): void => {
-    onRun(name)
+  // escolhe um comando: se tiver inputs, abre o form; senão roda direto
+  const pick = async (name: string): Promise<void> => {
+    const inputs = await commandInputs(name)
+    if (inputs.length === 0) {
+      onRun(name, {})
+      onClose()
+      return
+    }
+    const initial: Record<string, string> = {}
+    for (const inp of inputs) {
+      initial[inp.name] = inp.default ?? (inp.type === 'pick' ? (inp.options?.[0] ?? '') : '')
+    }
+    setValues(initial)
+    setForm({ name, inputs })
+  }
+
+  const submitForm = (): void => {
+    if (!form) return
+    onRun(form.name, values)
     onClose()
+  }
+
+  if (form) {
+    return (
+      <div className="palette-backdrop" onClick={onClose}>
+        <div className="palette" onClick={(e) => e.stopPropagation()}>
+          <div className="palette__formtitle">{form.name}</div>
+          <div className="palette__form">
+            {form.inputs.map((inp, i) => (
+              <label key={inp.name} className="palette__field">
+                <span>{inp.label ?? inp.name}</span>
+                {inp.type === 'pick' ? (
+                  <select
+                    autoFocus={i === 0}
+                    value={values[inp.name] ?? ''}
+                    onChange={(e) => setValues((v) => ({ ...v, [inp.name]: e.target.value }))}
+                  >
+                    {(inp.options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    autoFocus={i === 0}
+                    value={values[inp.name] ?? ''}
+                    onChange={(e) => setValues((v) => ({ ...v, [inp.name]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitForm()
+                      else if (e.key === 'Escape') onClose()
+                    }}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+          <div className="palette__actions">
+            <button onClick={() => setForm(null)}>Voltar</button>
+            <button className="palette__primary" onClick={submitForm}>
+              Rodar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -51,7 +119,7 @@ export function CommandPalette({
             } else if (e.key === 'Enter') {
               e.preventDefault()
               const c = filtered[clamped]
-              if (c) run(c.name)
+              if (c) void pick(c.name)
             } else if (e.key === 'Escape') {
               onClose()
             }
@@ -69,7 +137,7 @@ export function CommandPalette({
                 key={c.name}
                 className={`palette__item${i === clamped ? ' palette__item--active' : ''}`}
                 onMouseEnter={() => setActive(i)}
-                onClick={() => run(c.name)}
+                onClick={() => void pick(c.name)}
               >
                 {c.name}
               </div>

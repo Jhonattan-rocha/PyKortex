@@ -17,6 +17,7 @@ kernel chama ``pykortex._activate()`` (feito automaticamente pelo engine no boot
 """
 
 from pykortex.api import command, panel, show, viewer
+from pykortex.commands import command_inputs_json as _command_inputs_json
 from pykortex.commands import list_commands_json as _list_commands_json
 from pykortex.commands import list_panels_json as _list_panels_json
 from pykortex.commands import render_panel_json as _render_panel_json
@@ -39,6 +40,7 @@ __all__ = [
     "_clear_namespace_json",
     "_request_json",
     "_list_commands_json",
+    "_command_inputs_json",
     "_run_command",
     "_list_panels_json",
     "_render_panel_json",
