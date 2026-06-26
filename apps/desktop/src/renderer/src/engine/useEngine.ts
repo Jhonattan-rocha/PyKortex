@@ -4,7 +4,6 @@ import type {
   ApiResponse,
   CompleteResult,
   Diagnostic,
-  PkCommand,
   DfPage,
   DfView,
   GotoDef,
@@ -12,6 +11,8 @@ import type {
   KernelState,
   KernelStats,
   OutputMessage,
+  PkCommand,
+  PkPanel,
   ServerMessage,
   SignatureInfo,
   VariableInfo
@@ -49,6 +50,9 @@ export interface UseEngine {
   goto: (code: string, line: number, col: number) => Promise<GotoDef[]>
   listCommands: () => Promise<PkCommand[]>
   runCommand: (name: string) => void
+  listPanels: () => Promise<PkPanel[]>
+  renderPanel: (name: string) => Promise<{ html: string }>
+  kernelEpoch: number
 }
 
 const EMPTY_COMPLETE: CompleteResult = { matches: [], cursor_start: 0, cursor_end: 0, types: [] }
@@ -74,6 +78,8 @@ export function useEngine(): UseEngine {
   const [variables, setVariables] = useState<VariableInfo[]>([])
   const [stats, setStats] = useState<KernelStats | null>(null)
   const [errorText, setErrorText] = useState<string | null>(null)
+  // muda a cada (re)conexão e restart — usado para recarregar extensões
+  const [kernelEpoch, setKernelEpoch] = useState(0)
 
   const patch = (id: number, fn: (ex: Execution) => Execution): void =>
     setExecutions((prev) => prev.map((ex) => (ex.id === id ? fn(ex) : ex)))
@@ -122,6 +128,7 @@ export function useEngine(): UseEngine {
       if (msg.type === 'restarted') {
         pending.current = []
         setVariables([])
+        setKernelEpoch((e) => e + 1)
         requestInspect()
         return
       }
@@ -177,6 +184,14 @@ export function useEngine(): UseEngine {
         resolveRequest(msg.reqId, msg.commands ?? [])
         return
       }
+      if (msg.type === 'panels_reply') {
+        resolveRequest(msg.reqId, msg.panels ?? [])
+        return
+      }
+      if (msg.type === 'panel_reply') {
+        resolveRequest(msg.reqId, { html: msg.html ?? '' })
+        return
+      }
       if (msg.type === 'kernel_error') {
         setErrorText(msg.message)
         return
@@ -225,6 +240,7 @@ export function useEngine(): UseEngine {
         retry = 0
         setConn('open')
         setErrorText(null)
+        setKernelEpoch((e) => e + 1)
         requestInspect() // estado inicial das variáveis
       }
       ws.onclose = () => {
@@ -401,6 +417,24 @@ export function useEngine(): UseEngine {
     [execute]
   )
 
+  const listPanels = useCallback(
+    (): Promise<PkPanel[]> =>
+      sendRequest<PkPanel[]>(
+        { type: 'list_panels' },
+        { unavailable: [], onTimeout: [], timeoutMs: 3000 }
+      ),
+    [sendRequest]
+  )
+
+  const renderPanel = useCallback(
+    (name: string): Promise<{ html: string }> =>
+      sendRequest<{ html: string }>(
+        { type: 'render_panel', name },
+        { unavailable: { html: '' }, onTimeout: { html: '' }, timeoutMs: 5000 }
+      ),
+    [sendRequest]
+  )
+
   return {
     conn,
     kernel,
@@ -422,6 +456,9 @@ export function useEngine(): UseEngine {
     signatures,
     goto,
     listCommands,
-    runCommand
+    runCommand,
+    listPanels,
+    renderPanel,
+    kernelEpoch
   }
 }

@@ -16,8 +16,10 @@ As contribuições são registradas num registry e conectadas ao IPython quando 
 kernel chama ``pykortex._activate()`` (feito automaticamente pelo engine no boot).
 """
 
-from pykortex.api import command, show, viewer
+from pykortex.api import command, panel, show, viewer
 from pykortex.commands import list_commands_json as _list_commands_json
+from pykortex.commands import list_panels_json as _list_panels_json
+from pykortex.commands import render_panel_json as _render_panel_json
 from pykortex.commands import run_command as _run_command
 from pykortex.introspect import clear_namespace_json as _clear_namespace_json
 from pykortex.introspect import inspect_json as _inspect_json
@@ -28,6 +30,7 @@ from pykortex.runtime import activate as _activate
 __all__ = [
     "viewer",
     "command",
+    "panel",
     "show",
     "DATAFRAME_MIME",
     "_activate",
@@ -37,6 +40,8 @@ __all__ = [
     "_request_json",
     "_list_commands_json",
     "_run_command",
+    "_list_panels_json",
+    "_render_panel_json",
 ]
 __version__ = "0.0.0"
 

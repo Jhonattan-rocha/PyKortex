@@ -313,6 +313,17 @@ class KernelSession:
         data = await self._eval_expr('__import__("pykortex")._list_commands_json()')
         return data if isinstance(data, list) else []
 
+    async def list_panels(self) -> list[dict[str, Any]]:
+        """Lista os painéis `@pk.panel` registrados (out-of-band)."""
+        data = await self._eval_expr('__import__("pykortex")._list_panels_json()')
+        return data if isinstance(data, list) else []
+
+    async def render_panel(self, name: str) -> dict[str, Any]:
+        """Renderiza um painel para HTML (out-of-band)."""
+        expr = f'__import__("pykortex")._render_panel_json({name!r})'
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, dict) else {"html": ""}
+
     async def complete(self, code: str, cursor_pos: int) -> dict[str, Any]:
         """Completar via o kernel (jedi + namespace vivo), na posição do cursor."""
         empty = {"matches": [], "cursor_start": cursor_pos, "cursor_end": cursor_pos, "types": []}

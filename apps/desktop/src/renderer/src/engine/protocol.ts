@@ -111,6 +111,11 @@ export interface PkCommand {
   name: string
 }
 export type CommandsReplyMsg = { type: 'commands_reply'; reqId: number; commands: PkCommand[] }
+export interface PkPanel {
+  name: string
+}
+export type PanelsReplyMsg = { type: 'panels_reply'; reqId: number; panels: PkPanel[] }
+export type PanelReplyMsg = { type: 'panel_reply'; reqId: number; html: string }
 export type LintReplyMsg = { type: 'lint_reply'; reqId: number; diagnostics: Diagnostic[] }
 export type HoverReplyMsg = {
   type: 'hover_reply'
@@ -150,6 +155,8 @@ export type ServerMessage =
   | ApiResponseMsg
   | CompleteReplyMsg
   | CommandsReplyMsg
+  | PanelsReplyMsg
+  | PanelReplyMsg
   | LintReplyMsg
   | HoverReplyMsg
   | SignatureReplyMsg

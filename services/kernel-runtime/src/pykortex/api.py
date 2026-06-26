@@ -40,6 +40,23 @@ def command(name: str) -> Callable[[CommandFn], CommandFn]:
     return deco
 
 
+def panel(name: str) -> Callable[[CommandFn], CommandFn]:
+    """Registra um painel lateral. A função recebe um Context e retorna HTML.
+
+        @pk.panel("Conexões")
+        def _(ctx):
+            return "<h3>Minhas conexões</h3>..."
+
+    Botões com ``data-pk-command="Nome do comando"`` no HTML rodam aquele comando.
+    """
+
+    def deco(fn: CommandFn) -> CommandFn:
+        REGISTRY.add_panel(name, fn)
+        return fn
+
+    return deco
+
+
 def show(obj: Any) -> None:
     """Exibe um objeto pela cadeia de display do IPython (usa os viewers)."""
     try:

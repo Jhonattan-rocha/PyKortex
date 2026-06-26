@@ -4,6 +4,7 @@ import { ConsoleView } from './components/ConsoleView'
 import { FileTree, type FileTreeHandle } from './components/FileTree'
 import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
+import { PanelsView } from './components/PanelsView'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -95,7 +96,10 @@ export function App(): JSX.Element {
     signatures,
     goto,
     listCommands,
-    runCommand
+    runCommand,
+    listPanels,
+    renderPanel,
+    kernelEpoch
   } = useEngine()
 
   const execCount = executions.reduce((m, e) => Math.max(m, e.executionCount ?? 0), 0)
@@ -105,11 +109,12 @@ export function App(): JSX.Element {
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null)
   const [fsError, setFsError] = useState<string | null>(null)
   const [autoSave, setAutoSave] = useState(false)
-  const [sidebarView, setSidebarView] = useState<'files' | 'git'>('files')
+  const [sidebarView, setSidebarView] = useState<'files' | 'git' | 'panels'>('files')
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const extLoaded = useRef<Set<string>>(new Set())
+  const extDismissed = useRef<Set<string>>(new Set())
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -190,6 +195,7 @@ export function App(): JSX.Element {
   // extensões: carrega .pykortex/extensions.py se a pasta for confiável
   const maybeLoadExtensions = useCallback(
     async (root: string) => {
+      if (extDismissed.current.has(root)) return // usuário já recusou nesta sessão
       let code: string
       try {
         code = await readFile(EXTENSIONS_PATH)
@@ -202,10 +208,13 @@ export function App(): JSX.Element {
             'Elas executam Python com ACESSO TOTAL ao seu kernel — como rodar um script.\n\n' +
             'Confiar nesta pasta e carregar as extensões?'
         )
-        if (!ok) return
+        if (!ok) {
+          extDismissed.current.add(root)
+          return
+        }
         trustWorkspace(root)
       }
-      execute(code) // registra os @pk.command / @pk.viewer
+      execute(code) // registra os @pk.command / @pk.viewer / @pk.panel
     },
     [execute]
   )
@@ -395,13 +404,15 @@ export function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // carrega as extensões da pasta (1x por workspace, quando conectado)
+  // carrega as extensões da pasta — 1x por (workspace, epoch do kernel), pra
+  // recarregar também após restart (o namespace zera)
   useEffect(() => {
     if (conn !== 'open' || !workspaceRoot) return
-    if (extLoaded.current.has(workspaceRoot)) return
-    extLoaded.current.add(workspaceRoot)
+    const key = `${workspaceRoot}#${kernelEpoch}`
+    if (extLoaded.current.has(key)) return
+    extLoaded.current.add(key)
     void maybeLoadExtensions(workspaceRoot)
-  }, [conn, workspaceRoot, maybeLoadExtensions])
+  }, [conn, workspaceRoot, kernelEpoch, maybeLoadExtensions])
 
   // auto save: salva a aba ativa (se for arquivo e estiver suja) após 800ms ocioso
   useEffect(() => {
@@ -505,6 +516,12 @@ export function App(): JSX.Element {
                 >
                   Git
                 </button>
+                <button
+                  className={`sidebar-tab${sidebarView === 'panels' ? ' sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarView('panels')}
+                >
+                  Painéis
+                </button>
               </div>
               <div className="actions">
                 <button onClick={openFolder}>Abrir pasta…</button>
@@ -525,8 +542,15 @@ export function App(): JSX.Element {
                   onPathChanged={onPathChanged}
                 />
               </>
-            ) : (
+            ) : sidebarView === 'git' ? (
               <GitPanel root={workspaceRoot} onOpen={showDiff} onShowCommitDiff={showCommitDiff} />
+            ) : (
+              <PanelsView
+                listPanels={listPanels}
+                renderPanel={renderPanel}
+                onRunCommand={runCommand}
+                epoch={kernelEpoch}
+              />
             )}
           </div>
           <div className="sidebar-section sidebar-section--vars">

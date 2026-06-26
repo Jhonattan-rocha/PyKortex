@@ -20,6 +20,7 @@ CommandFn = Callable[..., Any]
 class Registry:
     viewers: list[tuple[type, ViewerFn]] = field(default_factory=list)
     commands: dict[str, CommandFn] = field(default_factory=dict)
+    panels: dict[str, CommandFn] = field(default_factory=dict)
     # Definido por runtime.activate(): conecta um viewer recém-registrado ao
     # IPython na hora (caso o registro aconteça depois do boot do kernel).
     wire_hook: Callable[[type, ViewerFn], None] | None = None
@@ -31,6 +32,9 @@ class Registry:
 
     def add_command(self, name: str, fn: CommandFn) -> None:
         self.commands[name] = fn
+
+    def add_panel(self, name: str, fn: CommandFn) -> None:
+        self.panels[name] = fn
 
 
 REGISTRY = Registry()
