@@ -35,6 +35,12 @@ export interface EditorProps {
   reveal?: { line: number; col: number; nonce: number }
   /** id/caminho da aba ativa: cria um model dedicado por arquivo (preserva undo/cursor) */
   path?: string
+  /** linhas com breakpoint no arquivo ativo */
+  breakpoints?: number[]
+  /** alterna um breakpoint (clique na margem de glifos) */
+  onToggleBreakpoint?: (line: number) => void
+  /** linha de parada atual do debugger (se for este arquivo) */
+  debugLine?: number | null
 }
 
 const K = monaco.languages.CompletionItemKind
@@ -78,9 +84,15 @@ export function CodeEditor({
   onGoto,
   onOpenDefinition,
   reveal,
-  path
+  path,
+  breakpoints,
+  onToggleBreakpoint,
+  debugLine
 }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
+  const onToggleBpRef = useRef(onToggleBreakpoint)
+  onToggleBpRef.current = onToggleBreakpoint
+  const decoRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
   const onRunRef = useRef(onRun)
   onRunRef.current = onRun
   const onSaveRef = useRef(onSave)
@@ -107,6 +119,35 @@ export function CodeEditor({
     editor.setPosition({ lineNumber: reveal.line, column: reveal.col + 1 })
     editor.focus()
   }, [reveal])
+
+  // breakpoints + linha atual do debugger (decorations na margem de glifos)
+  useEffect(() => {
+    const editor = editorRef.current
+    const coll = decoRef.current
+    if (!editor || !coll) return
+    const decos: monaco.editor.IModelDeltaDecoration[] = []
+    for (const ln of breakpoints ?? []) {
+      decos.push({
+        range: new monaco.Range(ln, 1, ln, 1),
+        options: {
+          glyphMarginClassName: 'bp-glyph',
+          glyphMarginHoverMessage: { value: 'Breakpoint' },
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+        }
+      })
+    }
+    if (debugLine != null) {
+      decos.push({
+        range: new monaco.Range(debugLine, 1, debugLine, 1),
+        options: {
+          isWholeLine: true,
+          className: 'debug-line',
+          glyphMarginClassName: 'debug-arrow'
+        }
+      })
+    }
+    coll.set(decos)
+  }, [breakpoints, debugLine, path, value])
 
   // diagnósticos (squiggles): re-lint debounced a cada mudança de conteúdo
   useEffect(() => {
@@ -270,6 +311,15 @@ export function CodeEditor({
 
   const handleMount: OnMount = (editor) => {
     editorRef.current = editor
+    decoRef.current = editor.createDecorationsCollection()
+
+    // clique na margem de glifos alterna um breakpoint
+    editor.onMouseDown((e) => {
+      if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+        const line = e.target.position?.lineNumber
+        if (line) onToggleBpRef.current?.(line)
+      }
+    })
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
       runCurrentCell(false)
@@ -300,6 +350,7 @@ export function CodeEditor({
         fontFamily: "'Cascadia Code', 'Consolas', monospace",
         fontSize: 13,
         minimap: { enabled: false },
+        glyphMargin: true,
         scrollBeyondLastLine: false,
         automaticLayout: true,
         renderWhitespace: 'selection',

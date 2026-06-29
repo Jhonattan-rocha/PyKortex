@@ -6,6 +6,8 @@ import { VariableExplorer } from './components/VariableExplorer'
 import { GitPanel } from './components/GitPanel'
 import { PanelsView } from './components/PanelsView'
 import { SearchPanel } from './components/SearchPanel'
+import { DebugPanel } from './components/DebugPanel'
+import { useDebug, type DebugStop } from './engine/useDebug'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -113,7 +115,9 @@ export function App(): JSX.Element {
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null)
   const [fsError, setFsError] = useState<string | null>(null)
   const [autoSave, setAutoSave] = useState(false)
-  const [sidebarView, setSidebarView] = useState<'files' | 'git' | 'panels' | 'search'>('files')
+  const [sidebarView, setSidebarView] = useState<
+    'files' | 'git' | 'panels' | 'search' | 'debug'
+  >('files')
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -123,6 +127,8 @@ export function App(): JSX.Element {
   const [tasks, setTasks] = useState<PkTask[]>([])
   const [terminalCommand, setTerminalCommand] = useState<{ text: string; nonce: number }>()
   const terminalCmdNonce = useRef(0)
+  // breakpoints por caminho de arquivo (relativo ao workspace)
+  const [breakpoints, setBreakpoints] = useState<Record<string, number[]>>({})
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -303,6 +309,60 @@ export function App(): JSX.Element {
     [openFile]
   )
 
+  // --- debug (debugpy via /ws/debug) ---
+  const onDebugStopped = useCallback(
+    (stop: DebugStop) => {
+      if (stop.path) {
+        void openFile(stop.path)
+        setReveal({ line: stop.line ?? 1, col: 0, nonce: ++revealNonce.current })
+      }
+      setSidebarView('debug')
+    },
+    [openFile]
+  )
+  const {
+    status: debugStatus,
+    pausedAt,
+    scopes: debugScopes,
+    selectedFrame,
+    output: debugOutput,
+    start: startDebug,
+    cont: debugContinue,
+    stepOver,
+    stepIn,
+    stepOut,
+    selectFrame,
+    stopDebug
+  } = useDebug(onDebugStopped)
+
+  const toggleBreakpoint = useCallback((path: string, line: number) => {
+    setBreakpoints((prev) => {
+      const lines = prev[path] ?? []
+      const next = lines.includes(line)
+        ? lines.filter((l) => l !== line)
+        : [...lines, line].sort((a, b) => a - b)
+      const updated = { ...prev, [path]: next }
+      if (next.length === 0) delete updated[path]
+      return updated
+    })
+  }, [])
+
+  const startDebugging = useCallback(async () => {
+    const t = tabs.find((x) => x.id === activeId)
+    if (!t?.path) {
+      setFsError('Salve o arquivo para depurar (o Debug roda o arquivo do disco).')
+      return
+    }
+    try {
+      await writeFile(t.path, t.code) // garante o disco atualizado
+      setTabs((prev) => prev.map((x) => (x.id === t.id ? { ...x, saved: t.code } : x)))
+      setSidebarView('debug')
+      await startDebug(t.path, breakpoints)
+    } catch (e) {
+      setFsError(e instanceof Error ? e.message : String(e))
+    }
+  }, [tabs, activeId, breakpoints, startDebug])
+
   const openFileFromDialog = useCallback(async () => {
     setFsError(null)
     try {
@@ -437,9 +497,30 @@ export function App(): JSX.Element {
   }
   useEffect(() => window.pykortex.onMenu(({ action, payload }) => actionsRef.current[action]?.(payload)), [])
 
-  // Ctrl+` alterna o terminal · Ctrl+Shift+P abre a command palette
+  // controles de debug acessíveis ao keydown (sem recriar o listener)
+  const debugKeysRef = useRef({
+    status: debugStatus,
+    cont: debugContinue,
+    stepOver,
+    stepIn,
+    stepOut,
+    stop: stopDebug,
+    start: startDebugging
+  })
+  debugKeysRef.current = {
+    status: debugStatus,
+    cont: debugContinue,
+    stepOver,
+    stepIn,
+    stepOut,
+    stop: stopDebug,
+    start: startDebugging
+  }
+
+  // Ctrl+` terminal · Ctrl+Shift+P paleta · Ctrl+Shift+F busca · F5/F10/F11 debug
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      const d = debugKeysRef.current
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault()
         setTerminalOpen((v) => !v)
@@ -449,6 +530,24 @@ export function App(): JSX.Element {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setSidebarView('search')
+      } else if (e.key === 'F5' && e.shiftKey) {
+        e.preventDefault()
+        if (d.status !== 'idle') d.stop()
+      } else if (e.key === 'F5') {
+        e.preventDefault()
+        if (d.status === 'paused') d.cont()
+        else if (d.status === 'idle') void d.start()
+      } else if (e.key === 'F10') {
+        if (d.status === 'paused') {
+          e.preventDefault()
+          d.stepOver()
+        }
+      } else if (e.key === 'F11') {
+        if (d.status === 'paused') {
+          e.preventDefault()
+          if (e.shiftKey) d.stepOut()
+          else d.stepIn()
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -574,6 +673,12 @@ export function App(): JSX.Element {
                   Buscar
                 </button>
                 <button
+                  className={`sidebar-tab${sidebarView === 'debug' ? ' sidebar-tab--active' : ''}${debugStatus === 'paused' ? ' sidebar-tab--alert' : ''}`}
+                  onClick={() => setSidebarView('debug')}
+                >
+                  Debug
+                </button>
+                <button
                   className={`sidebar-tab${sidebarView === 'panels' ? ' sidebar-tab--active' : ''}`}
                   onClick={() => setSidebarView('panels')}
                 >
@@ -627,6 +732,20 @@ export function App(): JSX.Element {
               <GitPanel root={workspaceRoot} onOpen={showDiff} onShowCommitDiff={showCommitDiff} />
             ) : sidebarView === 'search' ? (
               <SearchPanel onOpen={openAtLine} />
+            ) : sidebarView === 'debug' ? (
+              <DebugPanel
+                status={debugStatus}
+                pausedAt={pausedAt}
+                scopes={debugScopes}
+                selectedFrame={selectedFrame}
+                output={debugOutput}
+                onContinue={debugContinue}
+                onStepOver={stepOver}
+                onStepIn={stepIn}
+                onStepOut={stepOut}
+                onStop={stopDebug}
+                onSelectFrame={selectFrame}
+              />
             ) : (
               <PanelsView
                 listPanels={listPanels}
@@ -679,6 +798,13 @@ export function App(): JSX.Element {
               <button onClick={() => runAll(active?.code ?? '')} disabled={!connected || busy}>
                 ▶ Rodar tudo
               </button>
+              <button
+                onClick={() => void startDebugging()}
+                disabled={!connected || !active?.path || debugStatus !== 'idle'}
+                title="Depurar este arquivo (breakpoints na margem esquerda)"
+              >
+                🐞 Debug
+              </button>
               <button onClick={interrupt} disabled={!connected || !busy}>
                 ■ Interromper
               </button>
@@ -706,6 +832,13 @@ export function App(): JSX.Element {
               onGoto={goto}
               onOpenDefinition={onOpenDefinition}
               reveal={reveal}
+              breakpoints={active?.path ? (breakpoints[active.path] ?? []) : []}
+              onToggleBreakpoint={(line) => {
+                if (active?.path) toggleBreakpoint(active.path, line)
+              }}
+              debugLine={
+                pausedAt && active?.path && pausedAt.path === active.path ? pausedAt.line : null
+              }
             />
           </div>
           <div className="hint">

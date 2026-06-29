@@ -19,6 +19,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from pykortex_engine import __version__, analysis, terminal
+from pykortex_engine.debugger import DebugSession
 from pykortex_engine.api.files_router import router as files_router
 from pykortex_engine.api.git_router import router as git_router
 from pykortex_engine.files import get_workspace
@@ -233,6 +234,88 @@ async def execute_ws(websocket: WebSocket) -> None:
     except Exception:  # noqa: BLE001
         logger.exception("Erro no loop do WebSocket")
         await websocket.close()
+
+
+async def _handle_debug(dbg: DebugSession, msg: dict, send) -> None:
+    """Despacha um comando do cliente de debug."""
+    kind = msg.get("type")
+    if kind == "run":
+        for path, lines in (msg.get("breakpoints") or {}).items():
+            await dbg.set_breakpoints(path, lines)
+        dbg.run(msg.get("path", ""))
+        await send({"type": "running"})
+    elif kind == "setBreakpoints":
+        verified = await dbg.set_breakpoints(msg.get("path", ""), msg.get("lines") or [])
+        await send({"type": "breakpoints", "path": msg.get("path"), "verified": verified})
+    elif kind == "continue":
+        await dbg.cont(msg.get("threadId", 1))
+        await send({"type": "continued"})
+    elif kind == "stepOver":
+        await dbg.step_over(msg.get("threadId", 1))
+    elif kind == "stepIn":
+        await dbg.step_in(msg.get("threadId", 1))
+    elif kind == "stepOut":
+        await dbg.step_out(msg.get("threadId", 1))
+    elif kind == "frame":
+        scopes = await dbg.frame(msg.get("frameId"))
+        await send({"type": "frame_reply", "frameId": msg.get("frameId"), "scopes": scopes})
+    elif kind == "variables":
+        variables = await dbg.variables(msg.get("ref", 0))
+        await send(
+            {"type": "variables_reply", "reqId": msg.get("reqId"), "variables": variables}
+        )
+
+
+@app.websocket("/ws/debug")
+async def debug_ws(websocket: WebSocket) -> None:
+    """Sessão de debug (debugpy via protocolo Jupyter) num 2º client do kernel."""
+    await websocket.accept()
+    session = get_session()
+    dbg = DebugSession(session)
+    out_q: asyncio.Queue = asyncio.Queue()
+
+    async def send(m: dict) -> None:
+        await out_q.put(m)
+
+    async def sender() -> None:
+        while True:
+            await websocket.send_json(await out_q.get())
+
+    try:
+        await session.start()
+        await dbg.start()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Falha ao iniciar o debug")
+        await websocket.send_json({"type": "error", "message": str(exc)})
+        await websocket.close()
+        return
+
+    async def pump() -> None:
+        async for ev in dbg.events():
+            await send(ev)
+
+    sender_task = asyncio.create_task(sender())
+    pump_task = asyncio.create_task(pump())
+    await websocket.send_json({"type": "ready"})
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "stop":
+                break
+            await _handle_debug(dbg, msg, send)
+    except WebSocketDisconnect:
+        logger.info("Cliente desconectou do /ws/debug")
+    except Exception:  # noqa: BLE001
+        logger.exception("Erro no loop de debug")
+    finally:
+        sender_task.cancel()
+        pump_task.cancel()
+        await dbg.disconnect()
+        try:
+            await websocket.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @app.websocket("/ws/terminal")
