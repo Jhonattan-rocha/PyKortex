@@ -106,6 +106,7 @@ export function App(): JSX.Element {
     clearVars,
     pageDataFrame,
     requestApp,
+    traceApp,
     queryEngine,
     complete,
     lint,
@@ -891,6 +892,7 @@ export function App(): JSX.Element {
             executions={executions}
             fetchPage={pageDataFrame}
             onRequest={requestApp}
+            onTrace={traceApp}
             onQuery={queryEngine}
           />
         </section>

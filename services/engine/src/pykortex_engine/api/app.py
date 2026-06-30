@@ -163,6 +163,19 @@ async def _h_api_request(session: KernelSession, msg: dict) -> AsyncIterator[dic
     yield {"type": "api_response", "reqId": msg.get("reqId"), "response": response}
 
 
+async def _h_api_trace(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    trace = await session.trace_app(
+        msg.get("handle", ""),
+        msg.get("method", "GET"),
+        msg.get("path", "/"),
+        msg.get("query") or {},
+        msg.get("headers") or {},
+        msg.get("body"),
+        msg.get("hasBody", False),
+    )
+    yield {"type": "api_trace_reply", "reqId": msg.get("reqId"), "trace": trace}
+
+
 async def _h_sql_query(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     result = await session.query_engine(msg.get("handle", ""), msg.get("sql", ""))
     yield {"type": "sql_result", "reqId": msg.get("reqId"), "result": result}
@@ -205,6 +218,7 @@ HANDLERS: dict[str, Handler] = {
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
     "api_request": _h_api_request,
+    "api_trace": _h_api_trace,
     "sql_query": _h_sql_query,
     "df_page": _h_df_page,
 }

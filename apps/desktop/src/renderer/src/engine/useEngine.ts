@@ -17,6 +17,7 @@ import type {
   ServerMessage,
   SignatureInfo,
   SqlQueryResult,
+  TraceResult,
   VariableInfo
 } from './protocol'
 
@@ -45,6 +46,7 @@ export interface UseEngine {
   clearVars: () => void
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
   requestApp: (opts: ApiRequestOpts) => Promise<ApiResponse>
+  traceApp: (opts: ApiRequestOpts) => Promise<TraceResult>
   queryEngine: (handle: string, sql: string) => Promise<SqlQueryResult>
   complete: (code: string, cursorPos: number) => Promise<CompleteResult>
   lint: (code: string) => Promise<Diagnostic[]>
@@ -157,6 +159,10 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'sql_result') {
         resolveRequest(msg.reqId, msg.result ?? {})
+        return
+      }
+      if (msg.type === 'api_trace_reply') {
+        resolveRequest(msg.reqId, msg.trace ?? {})
         return
       }
       if (msg.type === 'complete_reply') {
@@ -370,6 +376,19 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const traceApp = useCallback(
+    (opts: ApiRequestOpts): Promise<TraceResult> =>
+      sendRequest<TraceResult>(
+        { type: 'api_trace', ...opts },
+        {
+          unavailable: { error: 'sem conexão com o engine' },
+          onTimeout: { error: 'timeout' },
+          timeoutMs: 30000
+        }
+      ),
+    [sendRequest]
+  )
+
   const queryEngine = useCallback(
     (handle: string, sql: string): Promise<SqlQueryResult> =>
       sendRequest<SqlQueryResult>(
@@ -489,6 +508,7 @@ export function useEngine(): UseEngine {
     clearVars,
     pageDataFrame,
     requestApp,
+    traceApp,
     queryEngine,
     complete,
     lint,

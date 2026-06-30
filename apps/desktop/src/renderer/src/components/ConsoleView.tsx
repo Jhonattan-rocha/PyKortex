@@ -12,7 +12,8 @@ import {
   type FastApiPayload,
   type OutputMessage,
   type SqlAlchemyPayload,
-  type SqlQueryResult
+  type SqlQueryResult,
+  type TraceResult
 } from '../engine/protocol'
 import { DataFrameView } from './DataFrameView'
 import { FastApiView } from './FastApiView'
@@ -20,6 +21,7 @@ import { SqlAlchemyView } from './SqlAlchemyView'
 
 type FetchPage = (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
 type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
+type OnTrace = (opts: ApiRequestOpts) => Promise<TraceResult>
 type OnQuery = (handle: string, sql: string) => Promise<SqlQueryResult>
 
 /** Console persistente: cada execução vira um bloco In[n] + suas saídas. */
@@ -27,11 +29,13 @@ export function ConsoleView({
   executions,
   fetchPage,
   onRequest,
+  onTrace,
   onQuery
 }: {
   executions: Execution[]
   fetchPage: FetchPage
   onRequest: OnRequest
+  onTrace: OnTrace
   onQuery: OnQuery
 }): JSX.Element {
   const endRef = useRef<HTMLDivElement | null>(null)
@@ -54,6 +58,7 @@ export function ConsoleView({
           ex={ex}
           fetchPage={fetchPage}
           onRequest={onRequest}
+          onTrace={onTrace}
           onQuery={onQuery}
         />
       ))}
@@ -66,11 +71,13 @@ function ExecutionBlock({
   ex,
   fetchPage,
   onRequest,
+  onTrace,
   onQuery
 }: {
   ex: Execution
   fetchPage: FetchPage
   onRequest: OnRequest
+  onTrace: OnTrace
   onQuery: OnQuery
 }): JSX.Element {
   const label = ex.executionCount != null ? `In [${ex.executionCount}]` : 'In [*]'
@@ -85,7 +92,14 @@ function ExecutionBlock({
       <pre className="exec__code">{ex.code.trim()}</pre>
       <div className="exec__out">
         {ex.outputs.map((o, i) => (
-          <OutputItem key={i} msg={o} fetchPage={fetchPage} onRequest={onRequest} onQuery={onQuery} />
+          <OutputItem
+            key={i}
+            msg={o}
+            fetchPage={fetchPage}
+            onRequest={onRequest}
+            onTrace={onTrace}
+            onQuery={onQuery}
+          />
         ))}
       </div>
     </div>
@@ -95,6 +109,7 @@ function ExecutionBlock({
 interface RenderCtx {
   fetchPage: FetchPage
   onRequest: OnRequest
+  onTrace: OnTrace
   onQuery: OnQuery
 }
 type RichRenderer = (data: Record<string, unknown>, ctx: RenderCtx) => JSX.Element | null
@@ -111,7 +126,9 @@ const RICH_RENDERERS: RichRenderer[] = [
   },
   (data, ctx) => {
     const fa = data[FASTAPI_MIME] as FastApiPayload | undefined
-    return fa?.kind === 'fastapi' ? <FastApiView app={fa} onRequest={ctx.onRequest} /> : null
+    return fa?.kind === 'fastapi' ? (
+      <FastApiView app={fa} onRequest={ctx.onRequest} onTrace={ctx.onTrace} />
+    ) : null
   },
   (data, ctx) => {
     const sa = data[SQLALCHEMY_MIME] as SqlAlchemyPayload | undefined
@@ -155,11 +172,13 @@ function OutputItem({
   msg,
   fetchPage,
   onRequest,
+  onTrace,
   onQuery
 }: {
   msg: OutputMessage
   fetchPage: FetchPage
   onRequest: OnRequest
+  onTrace: OnTrace
   onQuery: OnQuery
 }): JSX.Element | null {
   switch (msg.type) {
@@ -167,7 +186,12 @@ function OutputItem({
       return <pre className={`out out--stream out--${msg.name}`}>{msg.text}</pre>
     case 'execute_result':
     case 'display_data':
-      return renderRich(msg.data as Record<string, unknown>, { fetchPage, onRequest, onQuery })
+      return renderRich(msg.data as Record<string, unknown>, {
+        fetchPage,
+        onRequest,
+        onTrace,
+        onQuery
+      })
     case 'error':
       return (
         <pre className="out out--error">

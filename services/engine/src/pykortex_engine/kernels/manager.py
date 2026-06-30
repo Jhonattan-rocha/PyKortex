@@ -380,6 +380,31 @@ class KernelSession:
         data = await self._eval_expr(expr)
         return data if isinstance(data, dict) else {"error": "eval failed"}
 
+    async def trace_app(
+        self,
+        handle: str,
+        method: str,
+        path: str,
+        query: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        body: Any = None,
+        has_body: bool = False,
+    ) -> dict[str, Any]:
+        """Dispara um request E rastreia o caminho (middlewares + dependências)."""
+        args = json.dumps(
+            {
+                "method": method,
+                "path": path,
+                "query": query or {},
+                "headers": headers or {},
+                "body": body,
+                "has_body": bool(has_body),
+            }
+        )
+        expr = f'__import__("pykortex")._trace_request_json({handle!r}, {args!r})'
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, dict) else {"error": "eval failed"}
+
     async def query_engine(self, handle: str, sql: str) -> dict[str, Any]:
         """Roda SQL contra um Engine SQLAlchemy vivo cacheado por handle."""
         args = json.dumps({"sql": sql})

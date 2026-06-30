@@ -169,6 +169,7 @@ export type ServerMessage =
   | CommandsReplyMsg
   | CommandInputsReplyMsg
   | SqlResultMsg
+  | ApiTraceReplyMsg
   | PanelsReplyMsg
   | PanelReplyMsg
   | LintReplyMsg
@@ -260,6 +261,21 @@ export interface ApiRequestOpts {
   body?: unknown
   hasBody?: boolean
 }
+export interface TraceNode {
+  id: number
+  name: string
+  ms: number | null
+  children: TraceNode[]
+}
+export interface TraceResult {
+  matched?: { method: string; path: string; name: string; endpoint: string } | null
+  middlewares?: string[]
+  tree?: TraceNode | null
+  response?: { status: number; elapsed_ms: number; body: string; is_json: boolean }
+  total_ms?: number
+  error?: string
+}
+export type ApiTraceReplyMsg = { type: 'api_trace_reply'; reqId: number; trace: TraceResult }
 
 export interface DfRow {
   index: unknown

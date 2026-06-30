@@ -1,5 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
-import type { ApiRequestOpts, ApiResponse, FastApiPayload, FastApiRoute } from '../engine/protocol'
+import type {
+  ApiRequestOpts,
+  ApiResponse,
+  FastApiPayload,
+  FastApiRoute,
+  TraceNode,
+  TraceResult
+} from '../engine/protocol'
 import {
   loadCollections,
   newId,
@@ -8,6 +15,7 @@ import {
 } from '../engine/collections'
 
 type OnRequest = (opts: ApiRequestOpts) => Promise<ApiResponse>
+type OnTrace = (opts: ApiRequestOpts) => Promise<TraceResult>
 type OnSave = (name: string, opts: ApiRequestOpts) => void
 
 interface HistoryEntry {
@@ -20,10 +28,12 @@ interface HistoryEntry {
 /** Explorador de app FastAPI: rotas + request/response do app vivo. */
 export function FastApiView({
   app,
-  onRequest
+  onRequest,
+  onTrace
 }: {
   app: FastApiPayload
   onRequest: OnRequest
+  onTrace: OnTrace
 }): JSX.Element {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const idRef = useRef(0)
@@ -78,7 +88,14 @@ export function FastApiView({
       </div>
       <div className="fa__routes">
         {app.routes.map((r, i) => (
-          <RouteRow key={i} route={r} handle={app.handle} send={send} onSave={saveRequest} />
+          <RouteRow
+            key={i}
+            route={r}
+            handle={app.handle}
+            send={send}
+            onTrace={onTrace}
+            onSave={saveRequest}
+          />
         ))}
       </div>
       {mine.length > 0 && (
@@ -97,11 +114,13 @@ function RouteRow({
   route,
   handle,
   send,
+  onTrace,
   onSave
 }: {
   route: FastApiRoute
   handle: string
   send: OnRequest
+  onTrace: OnTrace
   onSave: OnSave
 }): JSX.Element {
   const [open, setOpen] = useState(false)
@@ -111,6 +130,7 @@ function RouteRow({
   const [bodyText, setBodyText] = useState('{}')
   const [bodyErr, setBodyErr] = useState<string | null>(null)
   const [resp, setResp] = useState<ApiResponse | null>(null)
+  const [trace, setTrace] = useState<TraceResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [saveName, setSaveName] = useState<string | null>(null)
 
@@ -146,7 +166,17 @@ function RouteRow({
     const opts = buildOpts()
     if (!opts) return
     setLoading(true)
+    setTrace(null)
     setResp(await send(opts))
+    setLoading(false)
+  }
+
+  const doTrace = async (): Promise<void> => {
+    const opts = buildOpts()
+    if (!opts) return
+    setLoading(true)
+    setResp(null)
+    setTrace(await onTrace(opts))
     setLoading(false)
   }
 
@@ -263,6 +293,14 @@ function RouteRow({
             <button className="fa-send" onClick={() => void doSend()} disabled={loading}>
               {loading ? 'enviando…' : `Enviar ${route.method}`}
             </button>
+            <button
+              className="fa-trace"
+              onClick={() => void doTrace()}
+              disabled={loading}
+              title="Disparar e rastrear o caminho (middlewares + dependências)"
+            >
+              🔬 Trace
+            </button>
             {saveName === null ? (
               <button className="fa-add" onClick={() => setSaveName('')}>
                 ★ Salvar
@@ -291,6 +329,7 @@ function RouteRow({
           </div>
 
           {resp && <ResponseView resp={resp} />}
+          {trace && <TraceView trace={trace} />}
 
           {Object.keys(route.responses).length > 0 && (
             <div className="fa-block fa-block--responses">
@@ -306,6 +345,75 @@ function RouteRow({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function flattenTree(
+  node: TraceNode,
+  depth = 0,
+  out: { node: TraceNode; depth: number }[] = []
+): { node: TraceNode; depth: number }[] {
+  out.push({ node, depth })
+  for (const c of node.children) flattenTree(c, depth + 1, out)
+  return out
+}
+
+/** Trace de uma request: rota casada + middlewares + árvore de dependências cronometrada. */
+function TraceView({ trace }: { trace: TraceResult }): JSX.Element {
+  if (trace.error) return <div className="fa-body-err">trace falhou: {trace.error}</div>
+  const rows = trace.tree ? flattenTree(trace.tree) : []
+  const maxMs = Math.max(0.1, ...rows.map((r) => r.node.ms ?? 0))
+
+  return (
+    <div className="fa-traceview">
+      <div className="fa-block__title">🔬 Trace do caminho</div>
+
+      {trace.matched && (
+        <div className="fa-trace-matched">
+          <span className={`fa-method fa-method--${trace.matched.method.toLowerCase()}`}>
+            {trace.matched.method}
+          </span>
+          <span className="fa-path">{trace.matched.path}</span>
+          <span className="fa-trace-fn">→ {trace.matched.endpoint}()</span>
+        </div>
+      )}
+
+      {trace.middlewares && trace.middlewares.length > 0 && (
+        <div className="fa-trace-mw">
+          <span className="fa-trace-label">middlewares</span>
+          {trace.middlewares.map((m, i) => (
+            <span key={i} className="fa-mw-chip">
+              {m}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {rows.length > 0 ? (
+        <div className="fa-trace-tree">
+          <div className="fa-trace-label">dependências → endpoint</div>
+          {rows.map((r, i) => (
+            <div key={i} className="fa-trace-row">
+              <span className="fa-trace-name" style={{ paddingLeft: r.depth * 14 }}>
+                {r.depth > 0 ? '└ ' : ''}
+                {r.node.name}
+              </span>
+              <span className="fa-trace-bar-wrap">
+                <span
+                  className="fa-trace-bar"
+                  style={{ width: `${((r.node.ms ?? 0) / maxMs) * 100}%` }}
+                />
+              </span>
+              <span className="fa-trace-ms">{r.node.ms != null ? `${r.node.ms} ms` : '—'}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="fa-trace-label">sem dependências (ou rota não casou)</div>
+      )}
+
+      {trace.response && <ResponseView resp={trace.response as ApiResponse} />}
     </div>
   )
 }

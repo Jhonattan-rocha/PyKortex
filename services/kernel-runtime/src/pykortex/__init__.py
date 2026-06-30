@@ -45,6 +45,7 @@ __all__ = [
     "_list_panels_json",
     "_render_panel_json",
     "_query_engine_json",
+    "_trace_request_json",
 ]
 __version__ = "0.0.0"
 
@@ -54,6 +55,13 @@ def _request_json(handle: str, args_json: str) -> str:
     from pykortex.fastapi_view import request_json
 
     return request_json(handle, args_json)
+
+
+def _trace_request_json(handle: str, args_json: str) -> str:
+    """Proxy lazy para fastapi_view.trace_request_json (request + trace do caminho)."""
+    from pykortex.fastapi_view import trace_request_json
+
+    return trace_request_json(handle, args_json)
 
 
 def _query_engine_json(handle: str, args_json: str) -> str:

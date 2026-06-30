@@ -1815,6 +1815,100 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
+.fa-trace {
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fa-trace:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.fa-trace:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* trace view (waterfall) */
+.fa-traceview {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--bg-2);
+}
+.fa-trace-matched {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+.fa-trace-fn {
+  color: var(--fg-dim);
+  font-family: var(--mono);
+}
+.fa-trace-mw {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.fa-trace-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+}
+.fa-mw-chip {
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 8px;
+}
+.fa-trace-tree {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fa-trace-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 64px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.fa-trace-name {
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fa-trace-bar-wrap {
+  height: 10px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fa-trace-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  min-width: 2px;
+}
+.fa-trace-ms {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+}
 .fa-response {
   border: 1px solid var(--border);
   border-radius: 4px;
