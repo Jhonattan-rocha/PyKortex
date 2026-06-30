@@ -6,10 +6,12 @@ import '@xterm/xterm/css/xterm.css'
 /** Terminal real (PTY no engine) renderizado com xterm.js, ligado ao /ws/terminal. */
 export function TerminalPanel({
   onClose,
-  command
+  command,
+  height
 }: {
   onClose: () => void
   command?: { text: string; nonce: number }
+  height?: number
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -111,7 +113,7 @@ export function TerminalPanel({
   }, [])
 
   return (
-    <div className="terminal-panel">
+    <div className="terminal-panel" style={height ? { height } : undefined}>
       <div className="terminal-panel__head">
         <span>Terminal</span>
         <button className="terminal-panel__close" onClick={onClose} title="Fechar terminal">

@@ -86,6 +86,32 @@ body {
 .main--3col {
   grid-template-columns: 240px 1.4fr 1fr;
 }
+/* grid redimensionável: as colunas vêm via style inline; os splitters são as
+   colunas de 6px entre as panes */
+.main--resizable {
+  gap: 0;
+  background: transparent;
+}
+
+/* splitters de redimensionamento */
+.splitter {
+  background: var(--border);
+  transition: background 0.1s;
+}
+.splitter:hover {
+  background: var(--accent);
+}
+.splitter--v {
+  cursor: col-resize;
+  width: 6px;
+  height: 100%;
+}
+.splitter--h {
+  cursor: row-resize;
+  height: 6px;
+  width: 100%;
+  flex: none;
+}
 
 .pane {
   display: flex;
@@ -335,28 +361,60 @@ button:disabled {
   min-height: 0;
 }
 
-/* abas do sidebar (Arquivos / Git) */
-.sidebar-tabs {
+/* activity bar (barra de ícones vertical à esquerda) */
+.activitybar {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 2px;
+  padding: 6px 0;
+  background: var(--bg-3);
+  border-right: 1px solid var(--border);
 }
-.sidebar-tab {
+.activity {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
-  color: var(--fg-dim);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  opacity: 0.65;
+  filter: grayscale(0.4);
+}
+.activity:hover {
+  opacity: 1;
+}
+.activity--active {
+  opacity: 1;
+  filter: none;
+  border-left-color: var(--accent);
+  background: var(--bg-2);
+}
+.activity__icon {
+  font-size: 19px;
+  line-height: 1;
+}
+.activity__dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffcc00;
+}
+
+/* título da view ativa no topo do sidebar */
+.sidebar-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 2px 6px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.sidebar-tab--active {
-  color: var(--fg);
-  border-bottom-color: var(--accent);
-}
-.sidebar-tab--alert {
-  color: #ffcc00;
+  color: var(--fg-dim);
+  font-weight: 600;
 }
 
 /* debug: breakpoints e linha atual (decorations do Monaco) */

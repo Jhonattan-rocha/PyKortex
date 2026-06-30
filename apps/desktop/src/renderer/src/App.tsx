@@ -8,6 +8,8 @@ import { PanelsView } from './components/PanelsView'
 import { SearchPanel } from './components/SearchPanel'
 import { DebugPanel } from './components/DebugPanel'
 import { useDebug, type DebugStop } from './engine/useDebug'
+import { Splitter } from './components/Splitter'
+import { clamp, loadPaneLayout, savePaneLayout } from './engine/paneLayout'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -30,6 +32,15 @@ total
 `
 
 const SCRATCH_ID = 'scratch'
+
+// Activity bar lateral: ícones empilhados na vertical (escala melhor que abas).
+const SIDEBAR_VIEWS = [
+  { id: 'files', label: 'Arquivos', icon: '📁' },
+  { id: 'search', label: 'Buscar', icon: '🔍' },
+  { id: 'git', label: 'Git', icon: '⎇' },
+  { id: 'debug', label: 'Debug', icon: '🐞' },
+  { id: 'panels', label: 'Painéis', icon: '🧩' }
+] as const
 
 interface Tab {
   id: string
@@ -130,6 +141,12 @@ export function App(): JSX.Element {
   const terminalCmdNonce = useRef(0)
   // breakpoints por caminho de arquivo (relativo ao workspace)
   const [breakpoints, setBreakpoints] = useState<Record<string, number[]>>({})
+  // layout redimensionável das panes (persistido)
+  const [layout, setLayout] = useState(() => loadPaneLayout())
+  useEffect(() => {
+    const id = setTimeout(() => savePaneLayout(layout), 300)
+    return () => clearTimeout(id)
+  }, [layout])
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -650,45 +667,37 @@ export function App(): JSX.Element {
         </span>
       </header>
 
-      <main className="main main--3col">
+      <main
+        className="main main--resizable"
+        style={{
+          gridTemplateColumns: `48px ${layout.sidebarW}px 6px minmax(0, 1fr) 6px ${layout.outputW}px`
+        }}
+      >
+        <nav className="activitybar">
+          {SIDEBAR_VIEWS.map((v) => (
+            <button
+              key={v.id}
+              className={`activity${sidebarView === v.id ? ' activity--active' : ''}`}
+              title={v.label}
+              onClick={() => setSidebarView(v.id)}
+            >
+              <span className="activity__icon">{v.icon}</span>
+              {v.id === 'debug' && debugStatus === 'paused' && <span className="activity__dot" />}
+            </button>
+          ))}
+        </nav>
+
         <aside className="pane pane--sidebar">
           <div className="sidebar-section sidebar-section--files">
             <div className="pane__head">
-              <div className="sidebar-tabs">
-                <button
-                  className={`sidebar-tab${sidebarView === 'files' ? ' sidebar-tab--active' : ''}`}
-                  onClick={() => setSidebarView('files')}
-                >
-                  Arquivos
-                </button>
-                <button
-                  className={`sidebar-tab${sidebarView === 'git' ? ' sidebar-tab--active' : ''}`}
-                  onClick={() => setSidebarView('git')}
-                >
-                  Git
-                </button>
-                <button
-                  className={`sidebar-tab${sidebarView === 'search' ? ' sidebar-tab--active' : ''}`}
-                  onClick={() => setSidebarView('search')}
-                >
-                  Buscar
-                </button>
-                <button
-                  className={`sidebar-tab${sidebarView === 'debug' ? ' sidebar-tab--active' : ''}${debugStatus === 'paused' ? ' sidebar-tab--alert' : ''}`}
-                  onClick={() => setSidebarView('debug')}
-                >
-                  Debug
-                </button>
-                <button
-                  className={`sidebar-tab${sidebarView === 'panels' ? ' sidebar-tab--active' : ''}`}
-                  onClick={() => setSidebarView('panels')}
-                >
-                  Painéis
-                </button>
-              </div>
-              <div className="actions">
-                <button onClick={openFolder}>Abrir pasta…</button>
-              </div>
+              <span className="sidebar-title">
+                {SIDEBAR_VIEWS.find((v) => v.id === sidebarView)?.label}
+              </span>
+              {sidebarView === 'files' && (
+                <div className="actions">
+                  <button onClick={openFolder}>Abrir pasta…</button>
+                </div>
+              )}
             </div>
             {sidebarView === 'files' ? (
               <>
@@ -756,7 +765,16 @@ export function App(): JSX.Element {
               />
             )}
           </div>
-          <div className="sidebar-section sidebar-section--vars">
+          <Splitter
+            orientation="h"
+            onDrag={(dy) =>
+              setLayout((l) => ({ ...l, varsH: clamp(l.varsH - dy, 80, 600) }))
+            }
+          />
+          <div
+            className="sidebar-section sidebar-section--vars"
+            style={{ height: layout.varsH, flex: 'none' }}
+          >
             <VariableExplorer
               variables={variables}
               onRefresh={inspect}
@@ -765,6 +783,13 @@ export function App(): JSX.Element {
             />
           </div>
         </aside>
+
+        <Splitter
+          orientation="v"
+          onDrag={(dx) =>
+            setLayout((l) => ({ ...l, sidebarW: clamp(l.sidebarW + dx, 160, 640) }))
+          }
+        />
 
         <section className="pane pane--editor">
           {diffView ? (
@@ -850,6 +875,13 @@ export function App(): JSX.Element {
           )}
         </section>
 
+        <Splitter
+          orientation="v"
+          onDrag={(dx) =>
+            setLayout((l) => ({ ...l, outputW: clamp(l.outputW - dx, 260, 1000) }))
+          }
+        />
+
         <section className="pane pane--output">
           <div className="pane__head">
             <span>Console</span>
@@ -865,7 +897,19 @@ export function App(): JSX.Element {
       </main>
 
       {terminalOpen && (
-        <TerminalPanel onClose={() => setTerminalOpen(false)} command={terminalCommand} />
+        <>
+          <Splitter
+            orientation="h"
+            onDrag={(dy) =>
+              setLayout((l) => ({ ...l, terminalH: clamp(l.terminalH - dy, 120, 700) }))
+            }
+          />
+          <TerminalPanel
+            onClose={() => setTerminalOpen(false)}
+            command={terminalCommand}
+            height={layout.terminalH}
+          />
+        </>
       )}
 
       <StatusBar
