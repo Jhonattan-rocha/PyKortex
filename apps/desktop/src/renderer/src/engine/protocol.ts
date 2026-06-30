@@ -168,6 +168,7 @@ export type ServerMessage =
   | CompleteReplyMsg
   | CommandsReplyMsg
   | CommandInputsReplyMsg
+  | SqlResultMsg
   | PanelsReplyMsg
   | PanelReplyMsg
   | LintReplyMsg
@@ -206,7 +207,22 @@ export interface SqlAlchemyPayload {
   count: number
   tables: SaTable[]
   relationships: SaRelationship[]
+  /** presentes quando exibido a partir de um Engine vivo (não só MetaData) */
+  handle?: string
+  live?: boolean
+  dialect?: string
+  url?: string
+  error?: string
 }
+export interface SqlQueryResult {
+  result?: DataFramePayload
+  rowcount?: number
+  truncated?: boolean
+  elapsed_ms?: number
+  message?: string
+  error?: string
+}
+export type SqlResultMsg = { type: 'sql_result'; reqId: number; result: SqlQueryResult }
 
 export interface FastApiRoute {
   method: string

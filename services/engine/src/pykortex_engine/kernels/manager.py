@@ -380,6 +380,13 @@ class KernelSession:
         data = await self._eval_expr(expr)
         return data if isinstance(data, dict) else {"error": "eval failed"}
 
+    async def query_engine(self, handle: str, sql: str) -> dict[str, Any]:
+        """Roda SQL contra um Engine SQLAlchemy vivo cacheado por handle."""
+        args = json.dumps({"sql": sql})
+        expr = f'__import__("pykortex")._query_engine_json({handle!r}, {args!r})'
+        data = await self._eval_expr(expr)
+        return data if isinstance(data, dict) else {"error": "eval failed"}
+
     async def interrupt(self) -> None:
         if self._km is not None:
             await self._km.interrupt_kernel()

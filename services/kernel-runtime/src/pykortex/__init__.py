@@ -44,6 +44,7 @@ __all__ = [
     "_run_command",
     "_list_panels_json",
     "_render_panel_json",
+    "_query_engine_json",
 ]
 __version__ = "0.0.0"
 
@@ -53,3 +54,10 @@ def _request_json(handle: str, args_json: str) -> str:
     from pykortex.fastapi_view import request_json
 
     return request_json(handle, args_json)
+
+
+def _query_engine_json(handle: str, args_json: str) -> str:
+    """Proxy lazy para sqlalchemy_view.query_engine_json (sqlalchemy pode faltar)."""
+    from pykortex.sqlalchemy_view import query_engine_json
+
+    return query_engine_json(handle, args_json)

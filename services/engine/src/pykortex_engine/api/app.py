@@ -163,6 +163,11 @@ async def _h_api_request(session: KernelSession, msg: dict) -> AsyncIterator[dic
     yield {"type": "api_response", "reqId": msg.get("reqId"), "response": response}
 
 
+async def _h_sql_query(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    result = await session.query_engine(msg.get("handle", ""), msg.get("sql", ""))
+    yield {"type": "sql_result", "reqId": msg.get("reqId"), "result": result}
+
+
 async def _h_df_page(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     sort = msg.get("sort") or {}
     result = await session.page(
@@ -200,6 +205,7 @@ HANDLERS: dict[str, Handler] = {
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
     "api_request": _h_api_request,
+    "sql_query": _h_sql_query,
     "df_page": _h_df_page,
 }
 

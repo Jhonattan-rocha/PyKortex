@@ -95,6 +95,7 @@ export function App(): JSX.Element {
     clearVars,
     pageDataFrame,
     requestApp,
+    queryEngine,
     complete,
     lint,
     hover,
@@ -854,7 +855,12 @@ export function App(): JSX.Element {
             <span>Console</span>
           </div>
           {errorText && <div className="banner banner--error">{errorText}</div>}
-          <ConsoleView executions={executions} fetchPage={pageDataFrame} onRequest={requestApp} />
+          <ConsoleView
+            executions={executions}
+            fetchPage={pageDataFrame}
+            onRequest={requestApp}
+            onQuery={queryEngine}
+          />
         </section>
       </main>
 

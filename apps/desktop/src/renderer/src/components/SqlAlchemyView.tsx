@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { SqlAlchemyPayload } from '../engine/protocol'
+import type { DfPage, DfView, SqlAlchemyPayload, SqlQueryResult } from '../engine/protocol'
 import { loadLayout, saveLayout, type Layout } from '../engine/erdLayout'
+import { DataFrameView } from './DataFrameView'
 
 interface Edge {
   key: string
@@ -12,7 +13,15 @@ const GAP = 24
 const PAD = 12
 
 /** Visualização do schema SQLAlchemy: ERD com tabelas arrastáveis e linhas FK→PK. */
-export function SqlAlchemyView({ schema }: { schema: SqlAlchemyPayload }): JSX.Element {
+export function SqlAlchemyView({
+  schema,
+  onQuery,
+  fetchPage
+}: {
+  schema: SqlAlchemyPayload
+  onQuery?: (handle: string, sql: string) => Promise<SqlQueryResult>
+  fetchPage?: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
+}): JSX.Element {
   const signature = schema.tables.map((t) => t.name).sort().join('|')
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -27,6 +36,20 @@ export function SqlAlchemyView({ schema }: { schema: SqlAlchemyPayload }): JSX.E
   const [edges, setEdges] = useState<Edge[]>([])
   const [size, setSize] = useState({ w: 600, h: 260 })
   const [dragName, setDragName] = useState<string | null>(null)
+
+  // --- cliente de query (só para Engine vivo) ---
+  const [sql, setSql] = useState('')
+  const [result, setResult] = useState<SqlQueryResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const runQuery = useCallback(async () => {
+    if (!onQuery || !schema.handle || !sql.trim()) return
+    setBusy(true)
+    try {
+      setResult(await onQuery(schema.handle, sql))
+    } finally {
+      setBusy(false)
+    }
+  }, [onQuery, schema.handle, sql])
 
   // --- auto-layout (empacotamento por colunas) usando alturas medidas ---
   const autoLayout = useCallback(
@@ -162,10 +185,17 @@ export function SqlAlchemyView({ schema }: { schema: SqlAlchemyPayload }): JSX.E
     else colEls.current.delete(key)
   }
 
+  const live = schema.live && schema.handle && onQuery
+
   return (
     <div className="sa">
       <div className="sa__head">
-        <span className="sa__title">Schema</span>
+        <span className="sa__title">{schema.live ? 'Banco' : 'Schema'}</span>
+        {schema.live && schema.dialect && (
+          <span className="sa__badge" title={schema.url}>
+            ● {schema.dialect}
+          </span>
+        )}
         <span className="sa__count">
           {schema.count} tabela{schema.count === 1 ? '' : 's'} · {schema.relationships.length} relaç
           {schema.relationships.length === 1 ? 'ão' : 'ões'}
@@ -174,6 +204,42 @@ export function SqlAlchemyView({ schema }: { schema: SqlAlchemyPayload }): JSX.E
           ↺ auto
         </button>
       </div>
+
+      {schema.error && <div className="sa__error">Reflexão falhou: {schema.error}</div>}
+
+      {live && (
+        <div className="sa__query">
+          <textarea
+            className="sa__sql"
+            placeholder="SELECT * FROM ...  (Ctrl+Enter para rodar)"
+            value={sql}
+            spellCheck={false}
+            onChange={(e) => setSql(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault()
+                void runQuery()
+              }
+            }}
+          />
+          <div className="sa__query-bar">
+            <button className="sa__run" onClick={() => void runQuery()} disabled={busy || !sql.trim()}>
+              {busy ? '…' : '▶ Rodar'}
+            </button>
+            {result?.elapsed_ms != null && !result.error && (
+              <span className="sa__meta">
+                {result.rowcount != null ? `${result.rowcount} linha(s) · ` : ''}
+                {result.elapsed_ms} ms{result.truncated ? ` · limitado a 5000` : ''}
+              </span>
+            )}
+          </div>
+          {result?.error && <div className="sa__error">{result.error}</div>}
+          {result?.message && <div className="sa__msg">{result.message}</div>}
+          {result?.result && fetchPage && (
+            <DataFrameView df={result.result} fetchPage={fetchPage} />
+          )}
+        </div>
+      )}
 
       <div className="sa__scroll" ref={scrollRef}>
         <div

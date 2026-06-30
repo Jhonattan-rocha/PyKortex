@@ -1834,6 +1834,72 @@ button:disabled {
   border-color: var(--accent);
   color: var(--fg);
 }
+.sa__badge {
+  font-size: 11px;
+  color: #4ec9b0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 7px;
+}
+.sa__query {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sa__sql {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+}
+.sa__sql:focus {
+  border-color: var(--accent);
+}
+.sa__query-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sa__run {
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+.sa__run:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sa__meta {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.sa__error {
+  margin: 0 10px 8px;
+  padding: 6px 8px;
+  background: rgba(244, 135, 113, 0.12);
+  color: #f48771;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.sa__msg {
+  font-size: 12px;
+  color: #4ec9b0;
+}
 .sa__scroll {
   max-height: 480px;
   overflow: auto;

@@ -16,6 +16,7 @@ import type {
   PkPanel,
   ServerMessage,
   SignatureInfo,
+  SqlQueryResult,
   VariableInfo
 } from './protocol'
 
@@ -44,6 +45,7 @@ export interface UseEngine {
   clearVars: () => void
   pageDataFrame: (handle: string, start: number, end: number, view?: DfView) => Promise<DfPage>
   requestApp: (opts: ApiRequestOpts) => Promise<ApiResponse>
+  queryEngine: (handle: string, sql: string) => Promise<SqlQueryResult>
   complete: (code: string, cursorPos: number) => Promise<CompleteResult>
   lint: (code: string) => Promise<Diagnostic[]>
   hover: (code: string, line: number, col: number) => Promise<HoverResult>
@@ -151,6 +153,10 @@ export function useEngine(): UseEngine {
       }
       if (msg.type === 'api_response') {
         resolveRequest(msg.reqId, msg.response ?? {})
+        return
+      }
+      if (msg.type === 'sql_result') {
+        resolveRequest(msg.reqId, msg.result ?? {})
         return
       }
       if (msg.type === 'complete_reply') {
@@ -364,6 +370,19 @@ export function useEngine(): UseEngine {
     [sendRequest]
   )
 
+  const queryEngine = useCallback(
+    (handle: string, sql: string): Promise<SqlQueryResult> =>
+      sendRequest<SqlQueryResult>(
+        { type: 'sql_query', handle, sql },
+        {
+          unavailable: { error: 'sem conexão com o engine' },
+          onTimeout: { error: 'timeout (query longa demais?)' },
+          timeoutMs: 60000
+        }
+      ),
+    [sendRequest]
+  )
+
   const complete = useCallback(
     (code: string, cursorPos: number): Promise<CompleteResult> =>
       sendRequest<CompleteResult>(
@@ -470,6 +489,7 @@ export function useEngine(): UseEngine {
     clearVars,
     pageDataFrame,
     requestApp,
+    queryEngine,
     complete,
     lint,
     hover,
