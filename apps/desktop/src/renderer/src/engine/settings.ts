@@ -5,6 +5,7 @@ export interface IdeSettings {
   accent: string // cor de destaque (#rrggbb)
   fontSize: number // tamanho da fonte do editor
   tabSize: number // largura do tab no editor
+  language: 'pt' | 'en' // idioma da interface
   pythonInterpreter: string // caminho do python do kernel ('' = padrão do engine)
   pythonEnv: Record<string, string> // variáveis de ambiente do kernel
 }
@@ -15,6 +16,7 @@ const DEFAULTS: IdeSettings = {
   accent: '#0e9f6e',
   fontSize: 13,
   tabSize: 4,
+  language: 'pt',
   pythonInterpreter: '',
   pythonEnv: {}
 }

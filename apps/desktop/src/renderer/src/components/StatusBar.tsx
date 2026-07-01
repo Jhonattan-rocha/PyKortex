@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ConnState } from '../engine/useEngine'
 import type { KernelState, KernelStats } from '../engine/protocol'
 import type { PkTask } from '../engine/tasks'
+import { useT } from '../engine/i18n'
 
 /** Barra de status / task manager: estado do kernel + recursos + ações. */
 export function StatusBar({
@@ -29,9 +30,10 @@ export function StatusBar({
   onInterrupt: () => void
   onRestart: () => void
 }): JSX.Element {
+  const t = useT()
   const connected = conn === 'open'
   const busy = kernel === 'busy'
-  const label = !connected ? conn : busy ? 'ocupado' : 'ocioso'
+  const label = !connected ? t(`sb.${conn}`) : busy ? t('sb.busy') : t('sb.idle')
   const [tasksOpen, setTasksOpen] = useState(false)
 
   return (
@@ -43,16 +45,14 @@ export function StatusBar({
 
       {stats?.alive && (
         <>
-          <span className="sb-metric" title="memória do processo do kernel">
-            RAM <strong>{stats.memory_mb?.toFixed(0)} MB</strong>
+          <span className="sb-metric">
+            {t('sb.ram')} <strong>{stats.memory_mb?.toFixed(0)} MB</strong>
           </span>
-          <span className="sb-metric" title="CPU do kernel (pode passar de 100% com vários núcleos)">
-            CPU <strong>{stats.cpu_percent?.toFixed(0)}%</strong>
+          <span className="sb-metric">
+            {t('sb.cpu')} <strong>{stats.cpu_percent?.toFixed(0)}%</strong>
           </span>
           {stats.threads != null && (
-            <span className="sb-metric" title="threads">
-              {stats.threads} thr
-            </span>
+            <span className="sb-metric">{t('sb.threads', { n: stats.threads })}</span>
           )}
         </>
       )}
@@ -61,14 +61,14 @@ export function StatusBar({
         In <strong>[{execCount}]</strong>
       </span>
       <span className="sb-metric">
-        {varCount} var{varCount === 1 ? '' : 's'}
+        {t(varCount === 1 ? 'sb.vars' : 'sb.varsPlural', { n: varCount })}
       </span>
 
       <div className="sb-actions">
         {tasks.length > 0 && (
           <div className="sb-tasks">
-            <button onClick={() => setTasksOpen((v) => !v)} title="Tarefas do projeto">
-              ▷ Tarefas
+            <button onClick={() => setTasksOpen((v) => !v)} title={t('sb.tasksTitle')}>
+              {t('sb.tasks')}
             </button>
             {tasksOpen && (
               <>
@@ -96,15 +96,15 @@ export function StatusBar({
         <button
           className={terminalOpen ? 'sb-term sb-term--on' : 'sb-term'}
           onClick={onToggleTerminal}
-          title="Terminal (Ctrl+`)"
+          title={t('sb.terminalTitle')}
         >
-          ⌨ Terminal
+          {t('sb.terminal')}
         </button>
-        <button onClick={onInterrupt} disabled={!connected || !busy} title="Interromper execução">
-          ■ Interromper
+        <button onClick={onInterrupt} disabled={!connected || !busy} title={t('sb.interruptTitle')}>
+          {t('sb.interrupt')}
         </button>
-        <button onClick={onRestart} disabled={!connected} title="Reiniciar kernel">
-          ⟳ Restart
+        <button onClick={onRestart} disabled={!connected} title={t('sb.restartTitle')}>
+          {t('sb.restart')}
         </button>
       </div>
     </footer>

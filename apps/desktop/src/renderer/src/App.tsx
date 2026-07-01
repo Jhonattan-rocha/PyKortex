@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEngine } from './engine/useEngine'
 import { ConsoleView } from './components/ConsoleView'
 import { FileTree, type FileTreeHandle } from './components/FileTree'
@@ -13,6 +13,7 @@ import { clamp, loadPaneLayout, savePaneLayout } from './engine/paneLayout'
 import { SettingsModal } from './components/SettingsModal'
 import { loadSettings, saveSettings } from './engine/settings'
 import { applyTheme, themeById } from './engine/themes'
+import { createT, I18nContext } from './engine/i18n'
 import {
   loadProjectSettings,
   saveProjectSettings,
@@ -144,6 +145,7 @@ export function App(): JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState(() => loadSettings())
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>({})
+  const tr = useMemo(() => createT(settings.language), [settings.language])
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -713,14 +715,15 @@ export function App(): JSX.Element {
   }, [tabs, activeId, workspaceRoot, autoSave])
 
   return (
+    <I18nContext.Provider value={tr}>
     <div className="app">
       <header className="topbar">
         <span className="brand">PyKortex</span>
-        <span className="tag">Fase 1 · editor</span>
+        <span className="tag">{tr('app.phase')}</span>
         <span className={`dot dot--${conn}`} />
         <span className="status">
-          conexão: {conn} · kernel: {kernel}
-          {autoSave && ' · auto save'}
+          {tr('app.status', { conn, kernel })}
+          {autoSave && tr('app.autosave')}
         </span>
       </header>
 
@@ -735,7 +738,7 @@ export function App(): JSX.Element {
             <button
               key={v.id}
               className={`activity${sidebarView === v.id ? ' activity--active' : ''}`}
-              title={v.label}
+              title={tr(`view.${v.id}`)}
               onClick={() => setSidebarView(v.id)}
             >
               <span className="activity__icon">{v.icon}</span>
@@ -744,7 +747,7 @@ export function App(): JSX.Element {
           ))}
           <button
             className="activity activity--bottom"
-            title="Configurações"
+            title={tr('view.settings')}
             onClick={() => setSettingsOpen(true)}
           >
             <span className="activity__icon">⚙️</span>
@@ -754,12 +757,10 @@ export function App(): JSX.Element {
         <aside className="pane pane--sidebar">
           <div className="sidebar-section sidebar-section--files">
             <div className="pane__head">
-              <span className="sidebar-title">
-                {SIDEBAR_VIEWS.find((v) => v.id === sidebarView)?.label}
-              </span>
+              <span className="sidebar-title">{tr(`view.${sidebarView}`)}</span>
               {sidebarView === 'files' && (
                 <div className="actions">
-                  <button onClick={openFolder}>Abrir pasta…</button>
+                  <button onClick={openFolder}>{tr('sidebar.openFolder')}</button>
                 </div>
               )}
             </div>
@@ -772,7 +773,7 @@ export function App(): JSX.Element {
                 )}
                 {!workspaceRoot && recents.length > 0 && (
                   <div className="recents">
-                    <div className="recents__title">Projetos recentes</div>
+                    <div className="recents__title">{tr('recents.title')}</div>
                     {recents.map((p) => (
                       <div key={p} className="recents__item">
                         <button
@@ -785,7 +786,7 @@ export function App(): JSX.Element {
                         </button>
                         <button
                           className="recents__remove"
-                          title="Remover dos recentes"
+                          title={tr('recents.remove')}
                           onClick={() => setRecents(removeRecent(p))}
                         >
                           ✕
@@ -887,26 +888,26 @@ export function App(): JSX.Element {
           </div>
 
           <div className="pane__subhead">
-            <span className="filetab">{active?.path ?? 'scratch (não salvo em arquivo)'}</span>
+            <span className="filetab">{active?.path ?? tr('editor.scratch')}</span>
             <div className="actions">
               <button onClick={() => runAll(active?.code ?? '')} disabled={!connected || busy}>
-                ▶ Rodar tudo
+                {tr('toolbar.runAll')}
               </button>
               <button
                 onClick={() => void startDebugging()}
                 disabled={!connected || !active?.path || debugStatus !== 'idle'}
-                title="Depurar este arquivo (breakpoints na margem esquerda)"
+                title={tr('toolbar.debugTitle')}
               >
-                🐞 Debug
+                {tr('toolbar.debug')}
               </button>
               <button onClick={interrupt} disabled={!connected || !busy}>
-                ■ Interromper
+                {tr('toolbar.interrupt')}
               </button>
-              <button onClick={restart} disabled={!connected} title="Reiniciar kernel">
-                ⟳ Restart
+              <button onClick={restart} disabled={!connected} title={tr('toolbar.restartTitle')}>
+                {tr('toolbar.restart')}
               </button>
               <button onClick={clear} disabled={executions.length === 0}>
-                Limpar
+                {tr('toolbar.clear')}
               </button>
             </div>
           </div>
@@ -938,10 +939,7 @@ export function App(): JSX.Element {
               monacoTheme={themeById(effectiveTheme).monaco}
             />
           </div>
-          <div className="hint">
-            Ctrl+Enter: célula · Shift+Enter: célula e avança · Ctrl+Shift+Enter: tudo · Ctrl+S:
-            salvar · células com <code>{'# %%'}</code>
-          </div>
+          <div className="hint">{tr('editor.hint')}</div>
             </>
           )}
         </section>
@@ -955,7 +953,7 @@ export function App(): JSX.Element {
 
         <section className="pane pane--output">
           <div className="pane__head">
-            <span>Console</span>
+            <span>{tr('console.title')}</span>
           </div>
           {errorText && <div className="banner banner--error">{errorText}</div>}
           <ConsoleView
@@ -1021,5 +1019,6 @@ export function App(): JSX.Element {
         />
       )}
     </div>
+    </I18nContext.Provider>
   )
 }
