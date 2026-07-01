@@ -9,7 +9,15 @@ export interface DiffData {
 }
 
 /** Visualização de diff (git) lado a lado, read-only, no Monaco DiffEditor. */
-export function DiffView({ data, onClose }: { data: DiffData; onClose: () => void }): JSX.Element {
+export function DiffView({
+  data,
+  onClose,
+  monacoTheme = 'vs-dark'
+}: {
+  data: DiffData
+  onClose: () => void
+  monacoTheme?: string
+}): JSX.Element {
   return (
     <div className="diffview">
       <div className="diffview__head">
@@ -24,7 +32,7 @@ export function DiffView({ data, onClose }: { data: DiffData; onClose: () => voi
           original={data.original}
           modified={data.modified}
           language={data.language}
-          theme="vs-dark"
+          theme={monacoTheme}
           options={{
             readOnly: true,
             renderSideBySide: true,

@@ -22,6 +22,7 @@ from pykortex_engine import __version__, analysis, terminal
 from pykortex_engine.debugger import DebugSession
 from pykortex_engine.api.files_router import router as files_router
 from pykortex_engine.api.git_router import router as git_router
+from pykortex_engine.api.python_router import router as python_router
 from pykortex_engine.files import get_workspace
 from pykortex_engine.kernels import KernelSession, get_session
 
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(files_router)
 app.include_router(git_router)
+app.include_router(python_router)
 
 
 @app.get("/health")
@@ -150,6 +152,12 @@ async def _h_restart(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     yield {"type": "status", "state": "idle"}
 
 
+async def _h_reconfigure_python(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
+    await session.reconfigure(msg.get("interpreter") or None, msg.get("env") or {})
+    yield {"type": "restarted"}
+    yield {"type": "status", "state": "idle"}
+
+
 async def _h_api_request(session: KernelSession, msg: dict) -> AsyncIterator[dict]:
     response = await session.request_app(
         msg.get("handle", ""),
@@ -217,6 +225,7 @@ HANDLERS: dict[str, Handler] = {
     "goto": _h_goto,
     "clear_vars": _h_clear_vars,
     "restart": _h_restart,
+    "reconfigure_python": _h_reconfigure_python,
     "api_request": _h_api_request,
     "api_trace": _h_api_trace,
     "sql_query": _h_sql_query,

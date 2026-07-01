@@ -97,18 +97,37 @@ class KernelSession:
         self._start_lock = asyncio.Lock()
         self._proc: Any = None  # psutil.Process raiz do kernel (medição externa)
         self._procs: dict[int, Any] = {}  # cache pid->Process p/ deltas de CPU
+        self._interpreter: str | None = None  # python customizado (None = engine)
+        self._env: dict[str, str] = {}  # env extra injetado no kernel
+        self._spec_root: str | None = None  # dir do kernelspec custom (limpar)
 
     @property
     def is_alive(self) -> bool:
         return self._km is not None
 
+    def config(self) -> dict[str, Any]:
+        """Configuração ativa do kernel (interpretador + env)."""
+        return {"interpreter": self._interpreter, "env": dict(self._env)}
+
     async def start(self) -> None:
         async with self._start_lock:
             if self._km is not None:
                 return
-            kernel_name = _ensure_kernelspec()
-            km = AsyncKernelManager(kernel_name=kernel_name)
-            await km.start_kernel()
+            from pykortex_engine import pythons
+
+            env = {**os.environ, **{k: str(v) for k, v in (self._env or {}).items()}}
+            if self._interpreter:
+                from jupyter_client.kernelspec import KernelSpecManager
+
+                kernel_name, spec_root = pythons.build_custom_spec(self._interpreter)
+                self._spec_root = spec_root
+                ksm = KernelSpecManager()
+                ksm.kernel_dirs.insert(0, spec_root)
+                km = AsyncKernelManager(kernel_name=kernel_name, kernel_spec_manager=ksm)
+            else:
+                kernel_name = _ensure_kernelspec()
+                km = AsyncKernelManager(kernel_name=kernel_name)
+            await km.start_kernel(env=env)
             client = km.client()
             client.start_channels()
             await client.wait_for_ready(timeout=60)
@@ -116,6 +135,22 @@ class KernelSession:
             self._client = client
             self._attach_proc()
             await self._activate_runtime()
+
+    async def reconfigure(self, interpreter: str | None, env: dict[str, str] | None) -> None:
+        """Aplica interpretador/env novos e reinicia o kernel do zero.
+
+        Se o interpretador escolhido falhar ao subir (ex.: sumiu/sem ipykernel),
+        cai de volta para o padrão do engine para não deixar o kernel morto.
+        """
+        self._interpreter = interpreter or None
+        self._env = {str(k): str(v) for k, v in (env or {}).items() if str(k).strip()}
+        await self.shutdown()
+        try:
+            await self.start()
+        except Exception:  # noqa: BLE001 - interpretador inválido
+            self._interpreter = None
+            await self.shutdown()
+            await self.start()
 
     def _attach_proc(self) -> None:
         """Cria um psutil.Process do kernel para medir mem/CPU de fora.
@@ -437,6 +472,11 @@ class KernelSession:
         if self._km is not None:
             await self._km.shutdown_kernel(now=True)
             self._km = None
+        if self._spec_root is not None:
+            from pykortex_engine import pythons
+
+            pythons.cleanup_spec(self._spec_root)
+            self._spec_root = None
 
 
 _session: KernelSession | None = None

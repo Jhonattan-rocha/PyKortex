@@ -58,6 +58,7 @@ export interface UseEngine {
   runCommand: (name: string, args?: Record<string, unknown>) => void
   listPanels: () => Promise<PkPanel[]>
   renderPanel: (name: string) => Promise<{ html: string }>
+  reconfigurePython: (interpreter: string | null, env: Record<string, string>) => void
   kernelEpoch: number
 }
 
@@ -313,6 +314,15 @@ export function useEngine(): UseEngine {
     setExecutions([])
   }, [])
 
+  const reconfigurePython = useCallback(
+    (interpreter: string | null, env: Record<string, string>) => {
+      wsRef.current?.send(JSON.stringify({ type: 'reconfigure_python', interpreter, env }))
+      pending.current = []
+      setExecutions([])
+    },
+    []
+  )
+
   const clear = useCallback(() => setExecutions([]), [])
 
   const inspect = useCallback(() => {
@@ -520,6 +530,7 @@ export function useEngine(): UseEngine {
     runCommand,
     listPanels,
     renderPanel,
+    reconfigurePython,
     kernelEpoch
   }
 }

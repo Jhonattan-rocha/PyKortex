@@ -10,6 +10,15 @@ import { DebugPanel } from './components/DebugPanel'
 import { useDebug, type DebugStop } from './engine/useDebug'
 import { Splitter } from './components/Splitter'
 import { clamp, loadPaneLayout, savePaneLayout } from './engine/paneLayout'
+import { SettingsModal } from './components/SettingsModal'
+import { loadSettings, saveSettings } from './engine/settings'
+import { applyTheme, themeById } from './engine/themes'
+import {
+  loadProjectSettings,
+  saveProjectSettings,
+  type ProjectSettings
+} from './engine/projectSettings'
+import { monaco } from './editor/monacoSetup'
 import { StatusBar } from './components/StatusBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -118,6 +127,7 @@ export function App(): JSX.Element {
     runCommand,
     listPanels,
     renderPanel,
+    reconfigurePython,
     kernelEpoch
   } = useEngine()
 
@@ -131,6 +141,9 @@ export function App(): JSX.Element {
   const [sidebarView, setSidebarView] = useState<
     'files' | 'git' | 'panels' | 'search' | 'debug'
   >('files')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState(() => loadSettings())
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>({})
   const [diffView, setDiffView] = useState<DiffData | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -148,6 +161,49 @@ export function App(): JSX.Element {
     const id = setTimeout(() => savePaneLayout(layout), 300)
     return () => clearTimeout(id)
   }, [layout])
+
+  // persiste as configs gerais
+  useEffect(() => {
+    saveSettings(settings)
+  }, [settings])
+
+  // aplica o interpretador/env configurados ao conectar (1x por sessão)
+  const pyApplied = useRef(false)
+  useEffect(() => {
+    if (conn !== 'open' || pyApplied.current) return
+    if (!settings.pythonInterpreter && Object.keys(settings.pythonEnv).length === 0) return
+    pyApplied.current = true
+    reconfigurePython(settings.pythonInterpreter || null, settings.pythonEnv)
+  }, [conn, settings.pythonInterpreter, settings.pythonEnv, reconfigurePython])
+
+  // tema efetivo = override do projeto (se houver) senão o da IDE
+  const effectiveTheme = projectSettings.theme || settings.theme
+  useEffect(() => {
+    applyTheme(effectiveTheme, settings.accent)
+    monaco.editor.setTheme(themeById(effectiveTheme).monaco)
+  }, [effectiveTheme, settings.accent])
+
+  // carrega as configs do projeto ao abrir uma pasta (sem disparar regravação)
+  const projSaveSkip = useRef(true)
+  useEffect(() => {
+    projSaveSkip.current = true
+    if (!workspaceRoot) {
+      setProjectSettings({})
+      return
+    }
+    void loadProjectSettings().then(setProjectSettings)
+  }, [workspaceRoot])
+
+  // grava as configs do projeto (debounced) ao editar no painel
+  useEffect(() => {
+    if (!workspaceRoot) return
+    if (projSaveSkip.current) {
+      projSaveSkip.current = false
+      return // pula a gravação logo após carregar/trocar de pasta
+    }
+    const id = setTimeout(() => void saveProjectSettings(projectSettings), 500)
+    return () => clearTimeout(id)
+  }, [projectSettings, workspaceRoot])
 
   const fileTreeRef = useRef<FileTreeHandle>(null)
   const revealNonce = useRef(0)
@@ -686,6 +742,13 @@ export function App(): JSX.Element {
               {v.id === 'debug' && debugStatus === 'paused' && <span className="activity__dot" />}
             </button>
           ))}
+          <button
+            className="activity activity--bottom"
+            title="Configurações"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <span className="activity__icon">⚙️</span>
+          </button>
         </nav>
 
         <aside className="pane pane--sidebar">
@@ -794,7 +857,11 @@ export function App(): JSX.Element {
 
         <section className="pane pane--editor">
           {diffView ? (
-            <DiffView data={diffView} onClose={() => setDiffView(null)} />
+            <DiffView
+              data={diffView}
+              onClose={() => setDiffView(null)}
+              monacoTheme={themeById(effectiveTheme).monaco}
+            />
           ) : (
             <>
           <div className="tabbar">
@@ -866,6 +933,9 @@ export function App(): JSX.Element {
               debugLine={
                 pausedAt && active?.path && pausedAt.path === active.path ? pausedAt.line : null
               }
+              fontSize={settings.fontSize}
+              tabSize={settings.tabSize}
+              monacoTheme={themeById(effectiveTheme).monaco}
             />
           </div>
           <div className="hint">
@@ -934,6 +1004,20 @@ export function App(): JSX.Element {
           commandInputs={commandInputs}
           onRun={runCommand}
           onClose={() => setPaletteOpen(false)}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onChange={setSettings}
+          project={projectSettings}
+          onChangeProject={setProjectSettings}
+          hasWorkspace={!!workspaceRoot}
+          autoSave={autoSave}
+          onToggleAutoSave={setAutoSave}
+          onApplyPython={reconfigurePython}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>

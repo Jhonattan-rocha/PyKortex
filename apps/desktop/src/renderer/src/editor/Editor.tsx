@@ -41,6 +41,12 @@ export interface EditorProps {
   onToggleBreakpoint?: (line: number) => void
   /** linha de parada atual do debugger (se for este arquivo) */
   debugLine?: number | null
+  /** tamanho da fonte (config) */
+  fontSize?: number
+  /** largura do tab (config) */
+  tabSize?: number
+  /** tema do Monaco ('vs' claro / 'vs-dark' escuro) */
+  monacoTheme?: string
 }
 
 const K = monaco.languages.CompletionItemKind
@@ -87,7 +93,10 @@ export function CodeEditor({
   path,
   breakpoints,
   onToggleBreakpoint,
-  debugLine
+  debugLine,
+  fontSize = 13,
+  tabSize = 4,
+  monacoTheme = 'vs-dark'
 }: EditorProps): JSX.Element {
   const editorRef = useRef<Editor | null>(null)
   const onToggleBpRef = useRef(onToggleBreakpoint)
@@ -341,20 +350,20 @@ export function CodeEditor({
     <MonacoEditor
       height="100%"
       language="python"
-      theme="vs-dark"
+      theme={monacoTheme}
       path={path}
       value={value}
       onChange={(v) => onChange(v ?? '')}
       onMount={handleMount}
       options={{
         fontFamily: "'Cascadia Code', 'Consolas', monospace",
-        fontSize: 13,
+        fontSize,
         minimap: { enabled: false },
         glyphMargin: true,
         scrollBeyondLastLine: false,
         automaticLayout: true,
         renderWhitespace: 'selection',
-        tabSize: 4,
+        tabSize,
         rulers: [88],
         // renderiza popups (autocomplete, hover) num layer no body, sem clip do container
         fixedOverflowWidgets: true
